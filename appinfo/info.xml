@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+  - SPDX-FileCopyrightText: 2026 Ricardo Ferreira <rsfneg@gmail.com>
+  - SPDX-License-Identifier: AGPL-3.0-or-later
+  -->
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>group_manager</id>
+    <name>Group Manager</name>
+    <summary>Manage local and LDAP groups and their members from one screen</summary>
+    <description><![CDATA[
+Group Manager gives administrators a single screen to browse groups (local and LDAP), inspect
+their members, and manage local group membership in bulk — without leaving Settings.
+    ]]></description>
+    <version>0.1.0</version>
+    <licence>AGPL-3.0-or-later</licence>
+    <author mail="rsfneg@gmail.com">Ricardo Ferreira</author>
+    <namespace>GroupManager</namespace>
+    <category>organization</category>
+
+    <dependencies>
+        <php min-version="8.1"/>
+        <nextcloud min-version="31" max-version="34"/>
+    </dependencies>
+
+    <settings>
+        <admin>OCA\GroupManager\Settings\AdminSettings</admin>
+        <admin-section>OCA\GroupManager\Settings\AdminSection</admin-section>
+    </settings>
+</info>
