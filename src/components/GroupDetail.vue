@@ -71,7 +71,8 @@
 			<GroupMembersManager v-if="group.canAddUser || group.canRemoveUser"
 				:group-id="group.id"
 				class="gm-detail__members"
-				@changed="onMembersChanged" />
+				@changed="onMembersChanged"
+				@pending-changed="$emit('pending-changed', $event)" />
 			<GroupMembersList v-else :group-id="group.id" class="gm-detail__members" />
 
 			<RenameGroupDialog :open="showRenameDialog"
@@ -137,7 +138,7 @@ export default {
 		},
 	},
 
-	emits: ['renamed', 'deleted'],
+	emits: ['renamed', 'deleted', 'pending-changed'],
 
 	data() {
 		return {

@@ -72,8 +72,10 @@
 					:disabled="applying"
 					:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
 					@update:model-value="toggleRemove(member)" />
-				<AccountOutline :size="16" class="gm-mm__row-icon" />
-				<span class="gm-mm__row-name">{{ member.displayName }}</span>
+				<span class="gm-mm__row-clickable" @click="!applying && toggleRemove(member)">
+					<AccountOutline :size="16" class="gm-mm__row-icon" />
+					<span class="gm-mm__row-name">{{ member.displayName }}</span>
+				</span>
 				<span v-if="pendingRemoveError(member.uid)" class="gm-mm__pending-error" :title="pendingRemoveError(member.uid)">
 					<AlertCircle :size="16" />
 				</span>
@@ -162,7 +164,7 @@ export default {
 		},
 	},
 
-	emits: ['changed'],
+	emits: ['changed', 'pending-changed'],
 
 	data() {
 		return {
@@ -223,6 +225,10 @@ export default {
 		groupId() {
 			this.resetState()
 			this.reload()
+		},
+
+		hasPendingChanges(value) {
+			this.$emit('pending-changed', value)
 		},
 	},
 
@@ -488,6 +494,16 @@ export default {
 
 .gm-mm__row--removing .gm-mm__row-name {
 	text-decoration: line-through;
+}
+
+.gm-mm__row-clickable {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 1;
+	min-width: 0;
+	padding: 2px 0;
+	cursor: pointer;
 }
 
 .gm-mm__row-icon {

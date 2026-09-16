@@ -59,7 +59,7 @@
 				:name="group.displayName"
 				:title="group.id !== group.displayName ? group.id : undefined"
 				:active="group.id === selectedId"
-				@click="$emit('select', group.id)">
+				@click="onItemClick($event, group.id)">
 				<template #icon>
 					<Lan v-if="group.backend === 'ldap'" :size="20" />
 					<AccountMultiple v-else :size="20" />
@@ -166,6 +166,15 @@ export default {
 		clearFilters() {
 			this.searchQuery = ''
 			this.origin = 'all'
+		},
+
+		onItemClick(event, gid) {
+			// NcAppNavigationItem's internal link only preventDefault()s when a
+			// vue-router `to` prop is used; without one its bare `href="#"`
+			// still navigates to an empty hash right after this handler runs,
+			// clobbering any URL hash the parent sets in reaction to 'select'.
+			event.preventDefault()
+			this.$emit('select', gid)
 		},
 	},
 }
