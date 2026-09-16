@@ -12,6 +12,7 @@ namespace OCA\GroupManager\Service;
 use OCP\Group\ISubAdmin;
 use OCP\IGroup;
 use OCP\IGroupManager;
+use OCP\IUserManager;
 use OCP\LDAP\ILDAPProviderFactory;
 
 /**
@@ -23,6 +24,7 @@ class GroupService {
 
     public function __construct(
         private IGroupManager $groupManager,
+        private IUserManager $userManager,
         private ISubAdmin $subAdmin,
         private ILDAPProviderFactory $ldapProviderFactory,
     ) {
@@ -55,6 +57,72 @@ class GroupService {
             ], array_values($users)),
             'total' => $total === false ? null : $total,
         ];
+    }
+
+    /**
+     * Users matching $search who are NOT already members of $gid — candidates
+     * for the "add member" remote-search select. Over-fetches from
+     * IUserManager::search() to absorb existing members filtered out, since
+     * there's no way to exclude them at the query level.
+     *
+     * @return list<array{uid: string, displayName: string}>
+     */
+    public function searchCandidates(string $gid, string $search, int $limit = 10): array {
+        $group = $this->requireGroup($gid);
+        $existingUids = array_flip(array_map(
+            static fn ($user) => $user->getUID(),
+            $group->getUsers(),
+        ));
+
+        $candidates = [];
+        foreach ($this->userManager->search($search, $limit + count($existingUids), 0) as $user) {
+            if (isset($existingUids[$user->getUID()])) {
+                continue;
+            }
+            $candidates[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+            if (count($candidates) >= $limit) {
+                break;
+            }
+        }
+        return $candidates;
+    }
+
+    /**
+     * @return array{uid: string, displayName: string}
+     */
+    public function addMember(string $gid, string $uid): array {
+        $group = $this->requireGroup($gid);
+        $this->requireLocal($group, 'modified');
+
+        $user = $this->userManager->get($uid);
+        if ($user === null) {
+            throw new GroupServiceException('User not found', 'USER_NOT_FOUND', 404);
+        }
+        if (!$group->canAddUser()) {
+            throw new GroupServiceException('Adding members is not supported by the backend', 'BACKEND_UNSUPPORTED', 400);
+        }
+
+        if (!$group->inGroup($user)) {
+            $group->addUser($user);
+        }
+        return ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+    }
+
+    public function removeMember(string $gid, string $uid): void {
+        $group = $this->requireGroup($gid);
+        $this->requireLocal($group, 'modified');
+
+        $user = $this->userManager->get($uid);
+        if ($user === null) {
+            throw new GroupServiceException('User not found', 'USER_NOT_FOUND', 404);
+        }
+        if (!$group->canRemoveUser()) {
+            throw new GroupServiceException('Removing members is not supported by the backend', 'BACKEND_UNSUPPORTED', 400);
+        }
+
+        if ($group->inGroup($user)) {
+            $group->removeUser($user);
+        }
     }
 
     public function createGroup(string $gid, string $displayName = ''): array {

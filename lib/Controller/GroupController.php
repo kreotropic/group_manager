@@ -44,6 +44,25 @@ class GroupController extends Controller {
         return $this->guarded(fn () => new DataResponse($this->groupService->getMembers($gid, $search, $limit, $offset)));
     }
 
+    public function candidates(string $gid, string $search = '', int $limit = 10): DataResponse {
+        $gid = urldecode($gid);
+        return $this->guarded(fn () => new DataResponse(['candidates' => $this->groupService->searchCandidates($gid, $search, $limit)]));
+    }
+
+    public function addMember(string $gid, string $uid): DataResponse {
+        $gid = urldecode($gid);
+        return $this->guarded(fn () => new DataResponse($this->groupService->addMember($gid, $uid)));
+    }
+
+    public function removeMember(string $gid, string $uid): DataResponse {
+        $gid = urldecode($gid);
+        $uid = urldecode($uid);
+        return $this->guarded(function () use ($gid, $uid) {
+            $this->groupService->removeMember($gid, $uid);
+            return new DataResponse([]);
+        });
+    }
+
     public function create(string $gid, string $displayName = ''): DataResponse {
         return $this->guarded(fn () => new DataResponse($this->groupService->createGroup($gid, $displayName)));
     }

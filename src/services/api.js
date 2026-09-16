@@ -59,3 +59,31 @@ export async function deleteGroup(gid) {
 	const { data } = await axios.delete(base('/api/groups/' + encodeURIComponent(gid)))
 	return data
 }
+
+/**
+ * Search users not already in the group, for the "add member" remote select.
+ */
+export async function searchGroupCandidates(gid, search, limit = 10) {
+	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/candidates'), {
+		params: { search, limit },
+	})
+	return data.candidates
+}
+
+/**
+ * Add one user to a local group. Idempotent if already a member.
+ */
+export async function addGroupMember(gid, uid) {
+	const { data } = await axios.post(base('/api/groups/' + encodeURIComponent(gid) + '/members'), { uid })
+	return data
+}
+
+/**
+ * Remove one user from a local group. Idempotent if not a member.
+ */
+export async function removeGroupMember(gid, uid) {
+	const { data } = await axios.delete(
+		base('/api/groups/' + encodeURIComponent(gid) + '/members/' + encodeURIComponent(uid)),
+	)
+	return data
+}

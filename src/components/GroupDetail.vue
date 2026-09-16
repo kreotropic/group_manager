@@ -68,7 +68,11 @@
 				<p v-if="group.dn" class="gm-detail__dn">{{ group.dn }}</p>
 			</NcNoteCard>
 
-			<GroupMembersList :group-id="group.id" class="gm-detail__members" />
+			<GroupMembersManager v-if="group.canAddUser || group.canRemoveUser"
+				:group-id="group.id"
+				class="gm-detail__members"
+				@changed="onMembersChanged" />
+			<GroupMembersList v-else :group-id="group.id" class="gm-detail__members" />
 
 			<RenameGroupDialog :open="showRenameDialog"
 				:group="group"
@@ -105,6 +109,7 @@ import Lan from 'vue-material-design-icons/Lan.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
 import GroupMembersList from './GroupMembersList.vue'
+import GroupMembersManager from './GroupMembersManager.vue'
 import { fetchGroup, deleteGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
@@ -122,6 +127,7 @@ export default {
 		Pencil,
 		RenameGroupDialog,
 		GroupMembersList,
+		GroupMembersManager,
 	},
 
 	props: {
@@ -200,6 +206,19 @@ export default {
 			this.group = group
 			this.showRenameDialog = false
 			this.$emit('renamed', group)
+		},
+
+		async onMembersChanged() {
+			// Silent refresh (no `loading` flag) — that would unmount the
+			// v-else-if="group" branch, including GroupMembersManager itself,
+			// wiping the just-applied result summary it's showing.
+			try {
+				this.group = await fetchGroup(this.groupId)
+				this.$emit('renamed', this.group)
+			} catch {
+				// Keep the stale summary rather than surface an error here —
+				// the member change itself already succeeded/reported.
+			}
 		},
 
 		onDeleteDialogUpdateOpen(value) {
