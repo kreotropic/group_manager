@@ -12,6 +12,7 @@ namespace OCA\GroupManager\Service;
 use OCP\Group\ISubAdmin;
 use OCP\IGroup;
 use OCP\IGroupManager;
+use OCP\LDAP\ILDAPProviderFactory;
 
 /**
  * Wraps IGroupManager/IGroup with the app's own rules for what counts as a
@@ -23,6 +24,7 @@ class GroupService {
     public function __construct(
         private IGroupManager $groupManager,
         private ISubAdmin $subAdmin,
+        private ILDAPProviderFactory $ldapProviderFactory,
     ) {
     }
 
@@ -149,7 +151,25 @@ class GroupService {
             'subAdminCount' => count($this->subAdmin->getGroupsSubAdmins($group)),
             'canAddUser' => $group->canAddUser(),
             'canRemoveUser' => $group->canRemoveUser(),
+            'dn' => $this->resolveLdapDn($group),
         ];
+    }
+
+    /**
+     * Best-effort LDAP DN lookup via the public ILDAPProvider API — only
+     * meaningful (and only attempted) for a group whose backend is LDAP, and
+     * never fatal: user_ldap being disabled, or the lookup itself failing,
+     * both just mean no DN is shown.
+     */
+    private function resolveLdapDn(IGroup $group): ?string {
+        if (!in_array('LDAP', $group->getBackendNames(), true) || !$this->ldapProviderFactory->isAvailable()) {
+            return null;
+        }
+        try {
+            return $this->ldapProviderFactory->getLDAPProvider()->getGroupDN($group->getGID());
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     /**

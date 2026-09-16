@@ -64,8 +64,11 @@
 			</div>
 
 			<NcNoteCard v-if="group.backend !== 'local'" type="info">
-				{{ t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.') }}
+				<p>{{ t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.') }}</p>
+				<p v-if="group.dn" class="gm-detail__dn">{{ group.dn }}</p>
 			</NcNoteCard>
+
+			<GroupMembersList :group-id="group.id" class="gm-detail__members" />
 
 			<RenameGroupDialog :open="showRenameDialog"
 				:group="group"
@@ -101,6 +104,7 @@ import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
 import Lan from 'vue-material-design-icons/Lan.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
+import GroupMembersList from './GroupMembersList.vue'
 import { fetchGroup, deleteGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
@@ -117,6 +121,7 @@ export default {
 		Lan,
 		Pencil,
 		RenameGroupDialog,
+		GroupMembersList,
 	},
 
 	props: {
@@ -316,6 +321,16 @@ export default {
 .gm-metric-card__label {
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
+}
+
+.gm-detail__dn {
+	font-family: monospace;
+	font-size: 13px;
+	word-break: break-all;
+}
+
+.gm-detail__members {
+	margin-top: 20px;
 }
 
 .gm-delete-dialog {
