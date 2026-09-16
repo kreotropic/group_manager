@@ -4,22 +4,18 @@
   -->
 <template>
 	<NcDialog :open="open"
-		:name="t('group_manager', 'Create group')"
+		:name="t('group_manager', 'Rename group')"
 		:buttons="buttons"
 		is-form
 		size="small"
 		@update:open="onUpdateOpen"
 		@closing="reset">
-		<div class="gm-create-dialog">
-			<NcTextField ref="gidField"
-				v-model="gid"
-				:label="t('group_manager', 'Group ID')"
-				:helper-text="t('group_manager', 'Cannot be changed later.')"
-				:error="Boolean(fieldError)"
+		<div class="gm-rename-dialog">
+			<NcTextField ref="nameField"
+				v-model="displayName"
+				:label="t('group_manager', 'Display name')"
+				:error="Boolean(errorMessage)"
 				autofocus />
-			<NcTextField v-model="displayName"
-				:label="t('group_manager', 'Display name (optional)')"
-				:placeholder="gid" />
 			<NcNoteCard v-if="errorMessage" type="error">
 				{{ errorMessage }}
 			</NcNoteCard>
@@ -32,11 +28,11 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { translate as t } from '@nextcloud/l10n'
-import { createGroup } from '../services/api.js'
+import { renameGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
 export default {
-	name: 'CreateGroupDialog',
+	name: 'RenameGroupDialog',
 
 	components: {
 		NcDialog,
@@ -49,30 +45,33 @@ export default {
 			type: Boolean,
 			default: false,
 		},
+		group: {
+			type: Object,
+			default: null,
+		},
 	},
 
-	emits: ['update:open', 'created'],
+	emits: ['update:open', 'renamed'],
 
 	data() {
 		return {
-			gid: '',
 			displayName: '',
 			errorMessage: '',
-			fieldError: false,
 		}
 	},
 
-	computed: {
-		buttons() {
-			return [
-				{ label: t('group_manager', 'Cancel'), type: 'reset', callback: () => true },
-				{
-					label: t('group_manager', 'Create'),
-					type: 'submit',
-					variant: 'primary',
-					callback: this.submit,
-				},
-			]
+	watch: {
+		group: {
+			immediate: true,
+			handler(group) {
+				this.displayName = group?.displayName ?? ''
+			},
+		},
+		open(value) {
+			if (value) {
+				this.displayName = this.group?.displayName ?? ''
+				this.errorMessage = ''
+			}
 		},
 	},
 
@@ -87,40 +86,48 @@ export default {
 		},
 
 		reset() {
-			this.gid = ''
-			this.displayName = ''
 			this.errorMessage = ''
-			this.fieldError = false
 		},
 
 		/**
 		 * Returning `false` keeps the dialog open (NcDialogButton awaits this).
 		 */
 		async submit() {
-			const gid = this.gid.trim()
-			if (gid === '') {
-				this.fieldError = true
-				this.errorMessage = t('group_manager', 'Group ID cannot be empty.')
+			const displayName = this.displayName.trim()
+			if (displayName === '') {
+				this.errorMessage = t('group_manager', 'Display name cannot be empty.')
 				return false
 			}
 
 			try {
-				const group = await createGroup(gid, this.displayName.trim())
-				this.$emit('created', group)
-				this.reset()
+				const group = await renameGroup(this.group.id, displayName)
+				this.$emit('renamed', group)
 				return true
 			} catch (err) {
-				this.fieldError = true
-				this.errorMessage = extractErrorMessage(err, t('group_manager', 'Could not create the group.'))
+				this.errorMessage = extractErrorMessage(err, t('group_manager', 'Could not rename the group.'))
 				return false
 			}
+		},
+	},
+
+	computed: {
+		buttons() {
+			return [
+				{ label: t('group_manager', 'Cancel'), type: 'reset', callback: () => true },
+				{
+					label: t('group_manager', 'Save'),
+					type: 'submit',
+					variant: 'primary',
+					callback: this.submit,
+				},
+			]
 		},
 	},
 }
 </script>
 
 <style scoped>
-.gm-create-dialog {
+.gm-rename-dialog {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;

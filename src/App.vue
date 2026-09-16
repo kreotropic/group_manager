@@ -23,12 +23,19 @@
 				@create="showCreateDialog = true" />
 
 			<div class="gm-detail">
-				<NcEmptyContent :name="t('group_manager', 'Select a group')"
+				<NcEmptyContent v-if="!selectedId"
+					class="gm-detail__empty"
+					:name="t('group_manager', 'Select a group')"
 					:description="t('group_manager', 'Choose a group on the left to see its details and members.')">
 					<template #icon>
 						<AccountMultiple :size="48" />
 					</template>
 				</NcEmptyContent>
+				<GroupDetail v-else
+					:key="selectedId"
+					:group-id="selectedId"
+					@renamed="onGroupRenamed"
+					@deleted="onGroupDeleted" />
 			</div>
 		</div>
 
@@ -44,6 +51,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import AccountMultiple from 'vue-material-design-icons/AccountMultiple.vue'
 import GroupList from './components/GroupList.vue'
+import GroupDetail from './components/GroupDetail.vue'
 import CreateGroupDialog from './components/CreateGroupDialog.vue'
 import { fetchGroups } from './services/api.js'
 import { extractErrorMessage } from './utils/errors.js'
@@ -56,6 +64,7 @@ export default {
 		NcEmptyContent,
 		AccountMultiple,
 		GroupList,
+		GroupDetail,
 		CreateGroupDialog,
 	},
 
@@ -94,6 +103,21 @@ export default {
 			this.selectedId = group.id
 			this.showCreateDialog = false
 		},
+
+		onGroupRenamed(group) {
+			const index = this.groups.findIndex((g) => g.id === group.id)
+			if (index !== -1) {
+				this.groups.splice(index, 1, group)
+			}
+			this.groups.sort((a, b) => a.displayName.localeCompare(b.displayName))
+		},
+
+		onGroupDeleted(gid) {
+			this.groups = this.groups.filter((g) => g.id !== gid)
+			if (this.selectedId === gid) {
+				this.selectedId = null
+			}
+		},
 	},
 }
 </script>
@@ -125,8 +149,10 @@ export default {
 .gm-detail {
 	flex: 1;
 	display: flex;
-	align-items: center;
-	justify-content: center;
-	overflow-y: auto;
+	overflow: hidden;
+}
+
+.gm-detail__empty {
+	margin: auto;
 }
 </style>
