@@ -56,7 +56,7 @@
 			<NcAppNavigationItem v-for="group in filteredGroups"
 				v-else
 				:key="group.id"
-				:name="group.displayName"
+				:name="itemLabel(group)"
 				:title="group.id !== group.displayName ? group.id : undefined"
 				:active="group.id === selectedId"
 				@click="onItemClick($event, group.id)">
@@ -166,6 +166,17 @@ export default {
 		clearFilters() {
 			this.searchQuery = ''
 			this.origin = 'all'
+		},
+
+		/**
+		 * Display names aren't unique in Nextcloud (only the gid is) — append
+		 * the gid whenever it differs so two groups with the same displayName
+		 * are never shown as indistinguishable rows in this list.
+		 */
+		itemLabel(group) {
+			return group.id === group.displayName
+				? group.displayName
+				: `${group.displayName} (${group.id})`
 		},
 
 		onItemClick(event, gid) {
