@@ -3,26 +3,34 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
   -->
 <template>
-	<NcAppNavigation :aria-label="t('group_manager', 'Groups')">
-		<template #search>
-			<NcAppNavigationSearch v-model="searchQuery"
-				:label="t('group_manager', 'Search groups')" />
-			<div class="gm-origin-filter" role="group" :aria-label="t('group_manager', 'Filter by origin')">
-				<NcButton v-for="opt in originOptions"
-					:key="opt.value"
-					:variant="origin === opt.value ? 'primary' : 'tertiary'"
-					:aria-pressed="origin === opt.value"
-					size="small"
-					@click="origin = opt.value">
-					{{ opt.label }}
-				</NcButton>
-			</div>
-		</template>
+	<nav class="gm-list" :aria-label="t('group_manager', 'Groups')">
+		<div class="gm-list__header">
+			<h2 class="gm-list__title">{{ t('group_manager', 'Groups') }}</h2>
+		</div>
 
-		<template #list>
+		<NcTextField class="gm-list__search"
+			v-model="searchQuery"
+			:label="t('group_manager', 'Search groups')">
+			<template #icon>
+				<Magnify :size="16" />
+			</template>
+		</NcTextField>
+
+		<div v-if="hasLdapGroups" class="gm-list__filters" role="group" :aria-label="t('group_manager', 'Filter by origin')">
+			<button v-for="opt in originOptions"
+				:key="opt.value"
+				type="button"
+				class="gm-list__filter"
+				:class="{ 'gm-list__filter--active': origin === opt.value }"
+				:aria-pressed="origin === opt.value"
+				@click="origin = opt.value">
+				{{ opt.label }}
+			</button>
+		</div>
+
+		<div class="gm-list__scroll">
 			<template v-if="loading">
 				<div v-for="n in 6" :key="n" class="gm-skeleton-row">
-					<span class="gm-skeleton-row__icon" />
 					<span class="gm-skeleton-row__text" />
 				</div>
 			</template>
@@ -53,47 +61,62 @@
 				</template>
 			</NcEmptyContent>
 
-			<NcAppNavigationItem v-for="group in filteredGroups"
-				v-else
-				:key="group.id"
-				:name="itemLabel(group)"
-				:title="group.id !== group.displayName ? group.id : undefined"
-				:active="group.id === selectedId"
-				@click="onItemClick($event, group.id)">
-				<template #icon>
-					<Lan v-if="group.backend === 'ldap'" :size="20" />
-					<AccountMultiple v-else :size="20" />
-				</template>
-				<template v-if="group.memberCount !== null" #counter>
-					<NcCounterBubble :count="group.memberCount" />
-				</template>
-			</NcAppNavigationItem>
-		</template>
+			<template v-else>
+				<button v-for="group in localVisible"
+					:key="group.id"
+					type="button"
+					class="gm-list__row"
+					:class="{ 'gm-list__row--active': group.id === selectedId }"
+					:aria-current="group.id === selectedId ? 'true' : undefined"
+					@click="onItemClick($event, group.id)">
+					<span class="gm-list__row-main">
+						<span class="gm-list__row-name">{{ group.displayName }}</span>
+						<span v-if="group.id !== group.displayName" class="gm-list__row-gid">{{ group.id }}</span>
+					</span>
+					<span class="gm-list__row-count" :class="{ 'gm-list__row-count--empty': !group.memberCount }">
+						{{ group.memberCount ? group.memberCount : t('group_manager', 'empty') }}
+					</span>
+				</button>
 
-		<template #footer>
-			<NcAppNavigationNew :text="t('group_manager', 'New group')"
-				button-id="gm-new-group"
-				@click="$emit('create')">
+				<div v-if="ldapVisible.length > 0" class="gm-list__section-header">
+					{{ t('group_manager', 'SYNCED') }}
+				</div>
+				<button v-for="group in ldapVisible"
+					:key="group.id"
+					type="button"
+					class="gm-list__row"
+					:class="{ 'gm-list__row--active': group.id === selectedId }"
+					:aria-current="group.id === selectedId ? 'true' : undefined"
+					@click="onItemClick($event, group.id)">
+					<span class="gm-list__row-main">
+						<span class="gm-list__row-name">{{ group.displayName }}</span>
+						<span v-if="group.id !== group.displayName" class="gm-list__row-gid">{{ group.id }}</span>
+					</span>
+					<span class="gm-list__row-count" :class="{ 'gm-list__row-count--empty': !group.memberCount }">
+						{{ group.memberCount ? group.memberCount : t('group_manager', 'empty') }}
+					</span>
+				</button>
+			</template>
+		</div>
+
+		<div class="gm-list__footer">
+			<NcButton variant="primary" class="gm-list__create" @click="$emit('create')">
 				<template #icon>
-					<Plus :size="20" />
+					<Plus :size="17" />
 				</template>
-			</NcAppNavigationNew>
-		</template>
-	</NcAppNavigation>
+				{{ t('group_manager', 'Create group') }}
+			</NcButton>
+		</div>
+	</nav>
 </template>
 
 <script>
-import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
-import NcAppNavigationSearch from '@nextcloud/vue/components/NcAppNavigationSearch'
-import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
-import NcAppNavigationNew from '@nextcloud/vue/components/NcAppNavigationNew'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
-import AccountMultiple from 'vue-material-design-icons/AccountMultiple.vue'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AccountGroupOutline from 'vue-material-design-icons/AccountGroupOutline.vue'
 import AccountSearchOutline from 'vue-material-design-icons/AccountSearchOutline.vue'
-import Lan from 'vue-material-design-icons/Lan.vue'
+import Magnify from 'vue-material-design-icons/Magnify.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import { translate as t } from '@nextcloud/l10n'
 
@@ -101,17 +124,12 @@ export default {
 	name: 'GroupList',
 
 	components: {
-		NcAppNavigation,
-		NcAppNavigationSearch,
-		NcAppNavigationItem,
-		NcAppNavigationNew,
 		NcButton,
-		NcCounterBubble,
 		NcEmptyContent,
-		AccountMultiple,
+		NcTextField,
 		AccountGroupOutline,
 		AccountSearchOutline,
-		Lan,
+		Magnify,
 		Plus,
 	},
 
@@ -145,6 +163,10 @@ export default {
 	},
 
 	computed: {
+		hasLdapGroups() {
+			return this.groups.some((group) => group.backend === 'ldap')
+		},
+
 		filteredGroups() {
 			const query = this.searchQuery.trim().toLowerCase()
 			return this.groups.filter((group) => {
@@ -158,6 +180,14 @@ export default {
 					|| group.id.toLowerCase().includes(query)
 			})
 		},
+
+		localVisible() {
+			return this.filteredGroups.filter((group) => group.backend !== 'ldap')
+		},
+
+		ldapVisible() {
+			return this.filteredGroups.filter((group) => group.backend === 'ldap')
+		},
 	},
 
 	methods: {
@@ -168,23 +198,7 @@ export default {
 			this.origin = 'all'
 		},
 
-		/**
-		 * Display names aren't unique in Nextcloud (only the gid is) — append
-		 * the gid whenever it differs so two groups with the same displayName
-		 * are never shown as indistinguishable rows in this list.
-		 */
-		itemLabel(group) {
-			return group.id === group.displayName
-				? group.displayName
-				: `${group.displayName} (${group.id})`
-		},
-
 		onItemClick(event, gid) {
-			// NcAppNavigationItem's internal link only preventDefault()s when a
-			// vue-router `to` prop is used; without one its bare `href="#"`
-			// still navigates to an empty hash right after this handler runs,
-			// clobbering any URL hash the parent sets in reaction to 'select'.
-			event.preventDefault()
 			this.$emit('select', gid)
 		},
 	},
@@ -192,51 +206,156 @@ export default {
 </script>
 
 <style scoped>
-/*
- * The NcAppNavigation collapse toggle is meant to be positioned by the
- * global #content-vue app layout, which this settings-section page doesn't
- * have — without it the button renders inline next to the search field
- * instead of fixed in a corner. Collapsing this sidebar has no real use
- * here anyway (it's not a full-page app), so it's simplest to hide it.
- */
-:deep(.app-navigation-toggle) {
-	display: none;
-}
-
-.gm-origin-filter {
+.gm-list {
+	width: 296px;
+	flex: none;
 	display: flex;
-	gap: 4px;
-	padding: 4px 8px 8px;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	border-right: 1px solid var(--color-border);
 }
 
-.gm-origin-filter :deep(button) {
+.gm-list__header {
+	padding: 16px 20px 8px;
+}
+
+.gm-list__title {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 600;
+}
+
+.gm-list__search {
+	padding: 0 20px;
+	margin-bottom: 8px;
+}
+
+.gm-list__filters {
+	display: flex;
+	gap: 14px;
+	padding: 4px 20px 12px;
+}
+
+.gm-list__filter {
+	padding: 0 0 4px;
+	border: none;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.gm-list__filter--active {
+	color: var(--color-main-text);
+	border-bottom-color: var(--color-primary-element);
+}
+
+.gm-list__scroll {
 	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	border-top: 1px solid var(--color-border);
+}
+
+.gm-list__section-header {
+	padding: 10px 20px 6px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: .09em;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-list__row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 20px;
+	border: none;
+	background: transparent;
+	color: var(--color-main-text);
+	text-align: left;
+	font-family: inherit;
+	cursor: pointer;
+	box-shadow: inset 2px 0 0 transparent;
+}
+
+.gm-list__row:hover {
+	background: var(--color-background-hover);
+}
+
+.gm-list__row--active {
+	background: var(--color-primary-element-light);
+	box-shadow: inset 2px 0 0 var(--color-primary-element);
+}
+
+.gm-list__row-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gm-list__row-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 14px;
+}
+
+.gm-list__row--active .gm-list__row-name {
+	font-weight: 600;
+}
+
+.gm-list__row-gid {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: monospace;
+	font-size: 11px;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-list__row-count {
+	flex-shrink: 0;
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+	font-variant-numeric: tabular-nums;
+}
+
+.gm-list__row-count--empty {
+	font-style: italic;
+	font-size: 12px;
+}
+
+.gm-list__footer {
+	flex-shrink: 0;
+	padding: 12px 20px;
+	border-top: 1px solid var(--color-border);
+}
+
+.gm-list__create {
+	width: 100%;
+	justify-content: center;
+	border-radius: var(--border-radius-pill);
 }
 
 .gm-skeleton-row {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	height: 44px;
-	padding: 0 12px;
-}
-
-.gm-skeleton-row__icon {
-	width: 20px;
-	height: 20px;
-	border-radius: 50%;
-	flex-shrink: 0;
+	height: 38px;
+	padding: 0 20px;
 }
 
 .gm-skeleton-row__text {
 	height: 12px;
 	width: 60%;
 	border-radius: 6px;
-}
-
-.gm-skeleton-row__icon,
-.gm-skeleton-row__text {
-	background: var(--color-background-darker);
+	background: var(--color-background-dark);
 	animation: gm-skeleton-pulse 1.4s ease-in-out infinite;
 }
 

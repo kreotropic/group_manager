@@ -114,11 +114,20 @@ export default {
 			})
 		},
 
+		/**
+		 * Case- and accent-insensitive, applied consistently everywhere the
+		 * list is touched so the order never flips depending on which action
+		 * last ran.
+		 */
+		sortGroups(groups) {
+			return [...groups].sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
+		},
+
 		async loadGroups() {
 			this.loading = true
 			this.loadError = ''
 			try {
-				this.groups = await fetchGroups()
+				this.groups = this.sortGroups(await fetchGroups())
 				this.announce(t('group_manager', '{count} groups loaded.', { count: this.groups.length }))
 			} catch (err) {
 				this.loadError = extractErrorMessage(err, t('group_manager', 'Could not load groups.'))
@@ -165,8 +174,7 @@ export default {
 		},
 
 		onGroupCreated(group) {
-			this.groups.push(group)
-			this.groups.sort((a, b) => a.displayName.localeCompare(b.displayName))
+			this.groups = this.sortGroups([...this.groups, group])
 			this.selectGroup(group.id)
 			this.showCreateDialog = false
 			showSuccess(t('group_manager', 'Group "{name}" created.', { name: group.displayName }))
@@ -176,10 +184,10 @@ export default {
 			const previous = this.groups.find((g) => g.id === group.id)
 			const wasRenamed = previous && previous.displayName !== group.displayName
 			const index = this.groups.findIndex((g) => g.id === group.id)
-			if (index !== -1) {
-				this.groups.splice(index, 1, group)
-			}
-			this.groups.sort((a, b) => a.displayName.localeCompare(b.displayName))
+			const next = index !== -1
+				? [...this.groups.slice(0, index), group, ...this.groups.slice(index + 1)]
+				: this.groups
+			this.groups = this.sortGroups(next)
 			if (wasRenamed) {
 				showSuccess(t('group_manager', 'Group renamed to "{name}".', { name: group.displayName }))
 			}
@@ -214,9 +222,8 @@ export default {
 
 .gm-layout {
 	display: flex;
-	height: 70vh;
+	height: calc(100vh - 190px);
 	min-height: 480px;
-	max-height: 720px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large);
 	overflow: hidden;

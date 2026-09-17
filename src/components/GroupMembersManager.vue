@@ -4,108 +4,185 @@
   -->
 <template>
 	<div class="gm-mm">
-		<div class="gm-mm__header">
-			<h3 class="gm-mm__title">
-				{{ t('group_manager', 'Members') }}
-				<span v-if="total !== null" class="gm-mm__total">({{ total }})</span>
-			</h3>
-			<NcTextField class="gm-mm__search"
-				v-model="search"
-				:label="t('group_manager', 'Search members')"
-				:show-trailing-button="search.length > 0"
-				@update:model-value="onSearchInput"
-				@trailing-button-click="search = ''">
-				<template #icon>
-					<Magnify :size="20" />
-				</template>
-			</NcTextField>
-		</div>
-
-		<NcSelect class="gm-mm__add"
-			:model-value="null"
-			:options="candidateOptions"
-			:loading="searchingCandidates"
-			:filterable="false"
-			label="displayName"
-			:placeholder="t('group_manager', 'Add member…')"
-			:aria-label-combobox="t('group_manager', 'Search users to add to this group')"
-			@search="onCandidateSearch"
-			@option:selected="onCandidateSelected">
-			<template #option="option">
-				<span>{{ option.displayName }}</span>
-				<span class="gm-mm__add-uid">{{ option.uid }}</span>
-			</template>
-		</NcSelect>
-
-		<ul v-if="pendingAdd.length > 0" class="gm-mm__pending">
-			<li v-for="item in pendingAdd" :key="'add-' + item.uid" class="gm-mm__pending-row gm-mm__pending-row--add">
-				<PlusCircleOutline :size="16" class="gm-mm__pending-icon" />
-				<span class="gm-mm__pending-name">{{ item.displayName }}</span>
-				<span v-if="item.status === 'error'" class="gm-mm__pending-error" :title="item.error">
-					<AlertCircle :size="16" />
-				</span>
-				<NcButton variant="tertiary"
-					:aria-label="t('group_manager', 'Cancel adding {name}', { name: item.displayName })"
-					:disabled="applying"
-					@click="cancelPendingAdd(item)">
+		<div class="gm-mm__scroll">
+			<div class="gm-mm__header">
+				<h3 class="gm-mm__title">
+					{{ t('group_manager', 'Members') }}
+					<span v-if="total !== null" class="gm-mm__count">{{ headerCountText }}</span>
+				</h3>
+				<NcTextField class="gm-mm__search"
+					v-model="memberSearch"
+					:label="t('group_manager', 'Filter members')"
+					:show-trailing-button="memberSearch.length > 0"
+					@update:model-value="onMemberSearchInput"
+					@trailing-button-click="memberSearch = ''">
 					<template #icon>
-						<Close :size="16" />
+						<Magnify :size="18" />
 					</template>
-				</NcButton>
-			</li>
-		</ul>
+				</NcTextField>
+			</div>
 
-		<div v-if="loading && members.length === 0" class="gm-mm__loading">
-			<NcLoadingIcon :size="24" />
-		</div>
+			<div class="gm-mm__add" :class="{ 'gm-mm__add--open': showDropdown }">
+				<Plus :size="18" class="gm-mm__add-icon" />
+				<input ref="addInput"
+					v-model="addQuery"
+					type="text"
+					class="gm-mm__add-input"
+					:placeholder="t('group_manager', 'Add a person, a whole group, or paste a list…')"
+					:aria-label="t('group_manager', 'Add a person, a whole group, or paste a list')"
+					@input="onAddInput"
+					@paste="onAddPaste"
+					@focus="onAddFocus"
+					@keydown.down.prevent="moveActive(1)"
+					@keydown.up.prevent="moveActive(-1)"
+					@keydown.enter.prevent="onAddEnter"
+					@keydown.esc="closeDropdown">
 
-		<p v-else-if="members.length === 0" class="gm-mm__empty">
-			{{ t('group_manager', 'No members found.') }}
-		</p>
+				<ul v-if="showDropdown" class="gm-mm__add-dropdown" role="listbox">
+					<li v-if="addSearching" class="gm-mm__add-status">
+						<NcLoadingIcon :size="16" />
+						{{ t('group_manager', 'Searching…') }}
+					</li>
+					<template v-else-if="addQuery.trim().length === 0">
+						<li class="gm-mm__add-status">{{ t('group_manager', 'Type to search users and groups') }}</li>
+					</template>
+					<template v-else-if="flatOptions.length === 0">
+						<li class="gm-mm__add-status">{{ t('group_manager', 'No results for "{term}"', { term: addQuery.trim() }) }}</li>
+					</template>
+					<template v-else>
+						<li v-for="(option, index) in flatOptions"
+							:key="option.key"
+							class="gm-mm__add-option"
+							:class="{ 'gm-mm__add-option--active': index === activeIndex }"
+							role="option"
+							:aria-selected="option.kind === 'user' && isQueuedUser(option.uid)"
+							@mouseenter="activeIndex = index"
+							@mousedown.prevent
+							@click="pickOption(option)">
+							<AccountGroup v-if="option.kind === 'group'" :size="18" class="gm-mm__add-option-icon" />
+							<AccountOutline v-else :size="18" class="gm-mm__add-option-icon" />
+							<span class="gm-mm__add-option-name">{{ option.displayName }}</span>
+							<span v-if="option.kind === 'group'" class="gm-mm__add-option-count">{{ option.newMemberCount }}</span>
+							<input v-else
+								type="checkbox"
+								class="gm-mm__add-option-check"
+								tabindex="-1"
+								aria-hidden="true"
+								:checked="isQueuedUser(option.uid)">
+						</li>
+						<li v-if="flatOptions.some((o) => o.kind === 'user')" class="gm-mm__add-hint">
+							{{ t('group_manager', 'Pick as many as you need, then press Esc') }}
+						</li>
+					</template>
+				</ul>
+			</div>
 
-		<ul v-else class="gm-mm__grid">
-			<li v-for="member in members"
-				:key="member.uid"
-				class="gm-mm__row"
-				:class="{ 'gm-mm__row--removing': isPendingRemove(member.uid) }">
-				<NcCheckboxRadioSwitch :model-value="isPendingRemove(member.uid)"
-					:disabled="applying"
-					:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
-					@update:model-value="toggleRemove(member)" />
-				<span class="gm-mm__row-clickable" @click="!applying && toggleRemove(member)">
-					<AccountOutline :size="16" class="gm-mm__row-icon" />
+			<div v-if="hasPendingChanges" class="gm-mm__queue" aria-live="polite">
+				<span v-for="chip in queueChips"
+					:key="chip.key"
+					class="gm-mm__chip"
+					:class="'gm-mm__chip--' + chip.kind"
+					:title="chip.error || undefined">
+					<span class="gm-mm__chip-prefix" aria-hidden="true">{{ chip.kind === 'remove' ? '−' : '+' }}</span>
+					<span class="gm-mm__chip-label">
+						{{ chip.displayName }}<span v-if="chip.count > 1" class="gm-mm__chip-count">{{ chip.count }}</span>
+					</span>
+					<AlertCircle v-if="chip.hasError" :size="14" class="gm-mm__chip-error" />
+					<button type="button"
+						class="gm-mm__chip-close"
+						:aria-label="t('group_manager', 'Cancel: {name}', { name: chip.displayName })"
+						:disabled="applying"
+						@click="cancelChip(chip)">
+						×
+					</button>
+				</span>
+			</div>
+
+			<div v-if="pasteReview" class="gm-mm__paste-review">
+				<p class="gm-mm__paste-review-summary">
+					{{ pasteReviewSummary }}
+				</p>
+				<ul v-if="pasteReview.matched.length > 0" class="gm-mm__paste-review-list">
+					<li v-for="m in pasteReview.matched" :key="'m-' + m.uid" class="gm-mm__paste-review-item gm-mm__paste-review-item--matched">
+						<CheckCircle :size="14" /> {{ m.displayName }}
+					</li>
+				</ul>
+				<ul v-if="pasteReview.alreadyMember.length > 0" class="gm-mm__paste-review-list">
+					<li v-for="m in pasteReview.alreadyMember" :key="'a-' + m.uid" class="gm-mm__paste-review-item gm-mm__paste-review-item--already">
+						<CheckCircle :size="14" /> {{ t('group_manager', '{name} (already in the group)', { name: m.displayName }) }}
+					</li>
+				</ul>
+				<ul v-if="pasteReview.unmatched.length > 0" class="gm-mm__paste-review-list">
+					<li v-for="(u, i) in pasteReview.unmatched" :key="'u-' + i" class="gm-mm__paste-review-item gm-mm__paste-review-item--unmatched">
+						<AlertCircle :size="14" /> {{ u.token }}
+					</li>
+				</ul>
+				<div class="gm-mm__paste-review-actions">
+					<NcButton :disabled="pasteReview.matched.length === 0" variant="primary" @click="confirmPasteReview">
+						{{ t('group_manager', 'Add {count} matched', { count: pasteReview.matched.length }) }}
+					</NcButton>
+					<NcButton @click="pasteReview = null">
+						{{ t('group_manager', 'Cancel') }}
+					</NcButton>
+				</div>
+			</div>
+
+			<div v-if="loading && members.length === 0" class="gm-mm__loading">
+				<NcLoadingIcon :size="24" />
+			</div>
+
+			<p v-else-if="members.length === 0" class="gm-mm__empty">
+				{{ t('group_manager', 'This group has no members yet.') }}
+			</p>
+
+			<ul v-else class="gm-mm__grid">
+				<li v-for="member in members"
+					:key="member.uid"
+					class="gm-mm__row"
+					:class="{ 'gm-mm__row--leaving': isPendingRemove(member.uid) }">
+					<NcAvatar :user="member.uid"
+						:display-name="member.displayName"
+						:size="26"
+						:disable-menu="true"
+						:disable-tooltip="true"
+						class="gm-mm__row-avatar" />
 					<span class="gm-mm__row-name">{{ member.displayName }}</span>
-				</span>
-				<span v-if="pendingRemoveError(member.uid)" class="gm-mm__pending-error" :title="pendingRemoveError(member.uid)">
-					<AlertCircle :size="16" />
-				</span>
-			</li>
-		</ul>
+					<span class="gm-mm__row-meta">
+						<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
+							{{ t('group_manager', 'leaving') }}
+						</span>
+						<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
+							{{ t('group_manager', 'disabled') }}
+						</span>
+						<span v-else-if="member.email" class="gm-mm__row-email">{{ member.email }}</span>
+						<span v-else class="gm-mm__row-email">{{ member.uid }}</span>
+					</span>
+					<button v-if="!isPendingRemove(member.uid)"
+						type="button"
+						class="gm-mm__row-remove"
+						:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
+						:disabled="applying"
+						@click="markForRemoval(member)">
+						×
+					</button>
+				</li>
+			</ul>
 
-		<NcButton v-if="hasMore"
-			class="gm-mm__more"
-			:disabled="applying"
-			@click="loadMore">
-			{{ t('group_manager', 'Load more') }}
-		</NcButton>
-
-		<div v-if="hasPendingChanges" class="gm-mm__actionbar">
-			<span class="gm-mm__actionbar-summary">{{ pendingSummary }}</span>
-			<NcButton :disabled="applying" @click="discardChanges">
-				{{ t('group_manager', 'Discard') }}
-			</NcButton>
-			<NcButton variant="primary" :disabled="applying" @click="applyChanges">
-				<template v-if="applying" #icon>
+			<NcButton v-if="hasMore"
+				class="gm-mm__more"
+				:disabled="applying || loadingMore"
+				@click="loadMore">
+				<template v-if="loadingMore" #icon>
 					<NcLoadingIcon :size="18" />
 				</template>
-				{{ applying ? t('group_manager', 'Applying…') : t('group_manager', 'Apply changes') }}
+				{{ t('group_manager', 'Load more') }}
 			</NcButton>
 		</div>
 
 		<NcNoteCard v-if="lastResult" :type="lastResult.failed.length > 0 ? 'warning' : 'success'" class="gm-mm__result">
 			<p>{{ resultSummaryText }}</p>
-			<details v-if="lastResult.failed.length > 0">
-				<summary>{{ t('group_manager', 'Show details') }}</summary>
+			<details v-if="lastResult.failed.length > 0" open>
+				<summary>{{ t('group_manager', 'Show failure details') }}</summary>
 				<ul class="gm-mm__result-list">
 					<li v-for="f in lastResult.failed" :key="f.action + '-' + f.uid">
 						{{ f.displayName }} — {{ f.error }}
@@ -121,18 +198,25 @@
 
 <script>
 import { translate as t } from '@nextcloud/l10n'
+import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import AccountGroup from 'vue-material-design-icons/AccountGroup.vue'
 import AccountOutline from 'vue-material-design-icons/AccountOutline.vue'
 import AlertCircle from 'vue-material-design-icons/AlertCircle.vue'
-import Close from 'vue-material-design-icons/Close.vue'
+import CheckCircle from 'vue-material-design-icons/CheckCircle.vue'
 import Magnify from 'vue-material-design-icons/Magnify.vue'
-import PlusCircleOutline from 'vue-material-design-icons/PlusCircleOutline.vue'
-import { fetchGroupMembers, searchGroupCandidates, addGroupMember, removeGroupMember } from '../services/api.js'
+import Plus from 'vue-material-design-icons/Plus.vue'
+import {
+	fetchGroupMembers,
+	searchGroupCandidates,
+	expandGroupForAdd,
+	resolvePastedList,
+	addGroupMember,
+	removeGroupMember,
+} from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 import { runWithConcurrency } from '../utils/concurrency.js'
 
@@ -144,17 +228,17 @@ export default {
 	name: 'GroupMembersManager',
 
 	components: {
+		NcAvatar,
 		NcButton,
-		NcCheckboxRadioSwitch,
 		NcLoadingIcon,
 		NcNoteCard,
-		NcSelect,
 		NcTextField,
+		AccountGroup,
 		AccountOutline,
 		AlertCircle,
-		Close,
+		CheckCircle,
 		Magnify,
-		PlusCircleOutline,
+		Plus,
 	},
 
 	props: {
@@ -170,18 +254,26 @@ export default {
 		return {
 			members: [],
 			total: null,
-			search: '',
+			memberSearch: '',
 			offset: 0,
 			loading: true,
-			searchTimer: null,
+			loadingMore: false,
+			memberSearchTimer: null,
 
-			candidateOptions: [],
-			searchingCandidates: false,
-			candidateSearchTimer: null,
+			addQuery: '',
+			addSearching: false,
+			addResults: { users: [], groups: [] },
+			addSearchTimer: null,
+			showDropdown: false,
+			activeIndex: -1,
 
-			// {uid, displayName, status: 'pending'|'applying'|'error', error}
+			// {uid, displayName, status: 'pending'|'applying'|'error', error, fromGroup?: {id, displayName}}
 			pendingAdd: [],
+			// {uid, displayName, status, error}
 			pendingRemove: [],
+
+			pasteReview: null,
+
 			applying: false,
 			lastResult: null,
 		}
@@ -196,28 +288,104 @@ export default {
 			return this.pendingAdd.length > 0 || this.pendingRemove.length > 0
 		},
 
-		pendingSummary() {
-			const parts = []
-			if (this.pendingAdd.length > 0) {
-				parts.push(t('group_manager', '{count} to add', { count: this.pendingAdd.length }))
+		pendingCount() {
+			return this.pendingAdd.length + this.pendingRemove.length
+		},
+
+		flatOptions() {
+			const groups = this.addResults.groups.map((g) => ({
+				key: 'group-' + g.id,
+				kind: 'group',
+				id: g.id,
+				displayName: g.displayName,
+				newMemberCount: g.newMemberCount,
+			}))
+			const users = this.addResults.users.map((u) => ({
+				key: 'user-' + u.uid,
+				kind: 'user',
+				uid: u.uid,
+				displayName: u.displayName,
+			}))
+			return [...groups, ...users]
+		},
+
+		queueChips() {
+			const individual = this.pendingAdd.filter((i) => !i.fromGroup)
+			const groupedMap = new Map()
+			for (const item of this.pendingAdd) {
+				if (!item.fromGroup) {
+					continue
+				}
+				const key = item.fromGroup.id
+				if (!groupedMap.has(key)) {
+					groupedMap.set(key, {
+						key: 'add-group-' + key,
+						kind: 'add-group',
+						groupId: key,
+						displayName: item.fromGroup.displayName,
+						items: [],
+					})
+				}
+				groupedMap.get(key).items.push(item)
 			}
-			if (this.pendingRemove.length > 0) {
-				parts.push(t('group_manager', '{count} to remove', { count: this.pendingRemove.length }))
+			const groupChips = Array.from(groupedMap.values()).map((g) => ({
+				...g,
+				count: g.items.length,
+				hasError: g.items.some((i) => i.status === 'error'),
+			}))
+			const addChips = individual.map((i) => ({
+				key: 'add-' + i.uid,
+				kind: 'add',
+				uid: i.uid,
+				displayName: i.displayName,
+				hasError: i.status === 'error',
+				error: i.error,
+			}))
+			const removeChips = this.pendingRemove.map((i) => ({
+				key: 'remove-' + i.uid,
+				kind: 'remove',
+				uid: i.uid,
+				displayName: i.displayName,
+				hasError: i.status === 'error',
+				error: i.error,
+			}))
+			return [...addChips, ...groupChips, ...removeChips]
+		},
+
+		headerCountText() {
+			const current = this.total ?? this.members.length
+			if (!this.hasPendingChanges) {
+				return t('group_manager', '{count} members', { count: current })
 			}
-			return parts.join(' · ')
+			const after = current - this.pendingRemove.length + this.pendingAdd.length
+			return t('group_manager', '{current} members · {after} after applying', { current, after })
+		},
+
+		pasteReviewSummary() {
+			if (!this.pasteReview) {
+				return ''
+			}
+			return t('group_manager', 'Matched {matched} of {total}.', {
+				matched: this.pasteReview.matched.length + this.pasteReview.alreadyMember.length,
+				total: this.pasteReview.matched.length + this.pasteReview.alreadyMember.length + this.pasteReview.unmatched.length,
+			})
 		},
 
 		resultSummaryText() {
 			if (!this.lastResult) {
 				return ''
 			}
-			if (this.lastResult.failed.length === 0) {
-				return t('group_manager', 'Applied {count} change(s) successfully.', { count: this.lastResult.succeededCount })
+			const parts = []
+			if (this.lastResult.addedCount > 0) {
+				parts.push(t('group_manager', '{count} added', { count: this.lastResult.addedCount }))
 			}
-			return t('group_manager', '{succeeded} change(s) applied, {failed} failed.', {
-				succeeded: this.lastResult.succeededCount,
-				failed: this.lastResult.failed.length,
-			})
+			if (this.lastResult.removedCount > 0) {
+				parts.push(t('group_manager', '{count} removed', { count: this.lastResult.removedCount }))
+			}
+			if (this.lastResult.failed.length > 0) {
+				parts.push(t('group_manager', '{count} failed', { count: this.lastResult.failed.length }))
+			}
+			return parts.length > 0 ? parts.join(', ') : t('group_manager', 'Nothing to apply.')
 		},
 	},
 
@@ -228,33 +396,53 @@ export default {
 		},
 
 		hasPendingChanges(value) {
-			this.$emit('pending-changed', value)
+			this.emitPendingChanged(value)
+		},
+
+		pendingCount() {
+			if (this.hasPendingChanges) {
+				this.emitPendingChanged(true)
+			}
 		},
 	},
 
 	mounted() {
 		this.reload()
+		document.addEventListener('click', this.onDocumentClick)
 	},
 
 	beforeUnmount() {
-		clearTimeout(this.searchTimer)
-		clearTimeout(this.candidateSearchTimer)
+		clearTimeout(this.memberSearchTimer)
+		clearTimeout(this.addSearchTimer)
+		document.removeEventListener('click', this.onDocumentClick)
 	},
 
 	methods: {
 		t,
 
+		emitPendingChanged(hasPendingChanges) {
+			this.$emit('pending-changed', {
+				hasPendingChanges,
+				count: this.pendingCount,
+				joining: this.pendingAdd.length,
+				leaving: this.pendingRemove.length,
+			})
+		},
+
 		resetState() {
-			this.search = ''
-			this.candidateOptions = []
+			this.memberSearch = ''
+			this.addQuery = ''
+			this.addResults = { users: [], groups: [] }
+			this.showDropdown = false
 			this.pendingAdd = []
 			this.pendingRemove = []
+			this.pasteReview = null
 			this.lastResult = null
 		},
 
-		onSearchInput() {
-			clearTimeout(this.searchTimer)
-			this.searchTimer = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS)
+		onMemberSearchInput() {
+			clearTimeout(this.memberSearchTimer)
+			this.memberSearchTimer = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS)
 		},
 
 		async reload() {
@@ -262,7 +450,7 @@ export default {
 			this.offset = 0
 			try {
 				const data = await fetchGroupMembers(this.groupId, {
-					search: this.search,
+					search: this.memberSearch,
 					limit: PAGE_SIZE,
 					offset: 0,
 				})
@@ -275,66 +463,193 @@ export default {
 		},
 
 		async loadMore() {
-			const data = await fetchGroupMembers(this.groupId, {
-				search: this.search,
-				limit: PAGE_SIZE,
-				offset: this.offset,
-			})
-			this.members = this.members.concat(data.members)
-			this.total = data.total
-			this.offset += data.members.length
-		},
-
-		onCandidateSearch(search, loading) {
-			clearTimeout(this.candidateSearchTimer)
-			if (search.trim() === '') {
-				this.candidateOptions = []
+			if (this.loadingMore) {
 				return
 			}
-			loading(true)
-			this.searchingCandidates = true
-			this.candidateSearchTimer = setTimeout(async () => {
+			this.loadingMore = true
+			try {
+				const data = await fetchGroupMembers(this.groupId, {
+					search: this.memberSearch,
+					limit: PAGE_SIZE,
+					offset: this.offset,
+				})
+				this.members = this.members.concat(data.members)
+				this.total = data.total
+				this.offset += data.members.length
+			} finally {
+				this.loadingMore = false
+			}
+		},
+
+		onDocumentClick(event) {
+			if (this.showDropdown && this.$el && !this.$el.contains(event.target)) {
+				this.closeDropdown()
+			}
+		},
+
+		onAddFocus() {
+			if (this.addQuery.trim() !== '') {
+				this.showDropdown = true
+			}
+		},
+
+		onAddInput() {
+			clearTimeout(this.addSearchTimer)
+			this.activeIndex = -1
+			const term = this.addQuery.trim()
+			if (term === '') {
+				this.addResults = { users: [], groups: [] }
+				this.showDropdown = false
+				return
+			}
+			this.showDropdown = true
+			this.addSearching = true
+			this.addSearchTimer = setTimeout(async () => {
 				try {
-					this.candidateOptions = await searchGroupCandidates(this.groupId, search, 10)
+					this.addResults = await searchGroupCandidates(this.groupId, term, 10)
 				} finally {
-					loading(false)
-					this.searchingCandidates = false
+					this.addSearching = false
 				}
 			}, SEARCH_DEBOUNCE_MS)
 		},
 
-		onCandidateSelected(option) {
-			const uid = option.uid
-			if (this.pendingAdd.some((i) => i.uid === uid) || this.members.some((m) => m.uid === uid)) {
+		/**
+		 * Multi-line paste is treated as a list to resolve against the server;
+		 * a single-line paste behaves like normal typing (left to the browser).
+		 */
+		onAddPaste(event) {
+			const text = event.clipboardData?.getData('text') ?? ''
+			const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+			if (lines.length <= 1) {
 				return
 			}
-			this.pendingAdd.push({ uid, displayName: option.displayName, status: 'pending', error: '' })
-			this.candidateOptions = []
+			event.preventDefault()
+			this.addQuery = ''
+			this.closeDropdown()
+			this.reviewPastedList(lines)
 		},
 
-		cancelPendingAdd(item) {
-			this.pendingAdd = this.pendingAdd.filter((i) => i.uid !== item.uid)
+		async reviewPastedList(lines) {
+			try {
+				const results = await resolvePastedList(this.groupId, lines)
+				const alreadyQueuedOrMember = new Set([
+					...this.members.map((m) => m.uid),
+					...this.pendingAdd.map((i) => i.uid),
+				])
+				this.pasteReview = {
+					matched: results.filter((r) => r.matched && !alreadyQueuedOrMember.has(r.uid)),
+					alreadyMember: results.filter((r) => r.matched && alreadyQueuedOrMember.has(r.uid)),
+					unmatched: results.filter((r) => !r.matched),
+				}
+			} catch (err) {
+				this.pasteReview = { matched: [], alreadyMember: [], unmatched: lines.map((token) => ({ token })) }
+			}
+		},
+
+		confirmPasteReview() {
+			for (const match of this.pasteReview.matched) {
+				this.addUserToQueue({ uid: match.uid, displayName: match.displayName })
+			}
+			this.pasteReview = null
+		},
+
+		closeDropdown() {
+			this.showDropdown = false
+			this.activeIndex = -1
+		},
+
+		moveActive(delta) {
+			if (!this.showDropdown || this.flatOptions.length === 0) {
+				return
+			}
+			const count = this.flatOptions.length
+			this.activeIndex = (this.activeIndex + delta + count) % count
+		},
+
+		onAddEnter() {
+			if (this.activeIndex >= 0 && this.flatOptions[this.activeIndex]) {
+				this.pickOption(this.flatOptions[this.activeIndex])
+			}
+		},
+
+		pickOption(option) {
+			if (option.kind === 'group') {
+				this.pickGroup(option)
+			} else {
+				this.toggleUserOption(option)
+			}
+		},
+
+		isQueuedUser(uid) {
+			return this.pendingAdd.some((i) => i.uid === uid && !i.fromGroup)
+		},
+
+		/**
+		 * Toggling (instead of add-and-close) lets several matches from the
+		 * same search — e.g. picking multiple "Ana"s — be queued without
+		 * re-opening and re-typing the search for each one.
+		 */
+		toggleUserOption(user) {
+			if (this.isQueuedUser(user.uid)) {
+				this.pendingAdd = this.pendingAdd.filter((i) => !(i.uid === user.uid && !i.fromGroup))
+			} else {
+				this.addUserToQueue({ uid: user.uid, displayName: user.displayName })
+			}
+		},
+
+		async pickGroup(group) {
+			this.addQuery = ''
+			this.closeDropdown()
+			try {
+				const members = await expandGroupForAdd(this.groupId, group.id)
+				for (const member of members) {
+					this.addUserToQueue({ ...member, fromGroup: { id: group.id, displayName: group.displayName } })
+				}
+			} catch {
+				// Silently no-op — the picker already only offered groups with
+				// newMemberCount > 0, so a failure here is rare (race with a
+				// concurrent change); nothing was queued, nothing to undo.
+			}
+		},
+
+		addUserToQueue(user) {
+			if (this.pendingAdd.some((i) => i.uid === user.uid) || this.members.some((m) => m.uid === user.uid)) {
+				return
+			}
+			this.pendingAdd.push({
+				uid: user.uid,
+				displayName: user.displayName,
+				status: 'pending',
+				error: '',
+				fromGroup: user.fromGroup || null,
+			})
+		},
+
+		cancelChip(chip) {
+			if (chip.kind === 'add') {
+				this.pendingAdd = this.pendingAdd.filter((i) => i.uid !== chip.uid)
+			} else if (chip.kind === 'add-group') {
+				this.pendingAdd = this.pendingAdd.filter((i) => !(i.fromGroup && i.fromGroup.id === chip.groupId))
+			} else if (chip.kind === 'remove') {
+				this.pendingRemove = this.pendingRemove.filter((i) => i.uid !== chip.uid)
+			}
 		},
 
 		isPendingRemove(uid) {
 			return this.pendingRemove.some((i) => i.uid === uid)
 		},
 
-		pendingRemoveError(uid) {
-			return this.pendingRemove.find((i) => i.uid === uid)?.error || ''
-		},
-
-		toggleRemove(member) {
+		markForRemoval(member) {
 			if (this.isPendingRemove(member.uid)) {
-				this.pendingRemove = this.pendingRemove.filter((i) => i.uid !== member.uid)
-			} else {
-				this.pendingRemove.push({ uid: member.uid, displayName: member.displayName, status: 'pending', error: '' })
+				return
 			}
+			this.pendingRemove.push({ uid: member.uid, displayName: member.displayName, status: 'pending', error: '' })
 		},
 
 		discardChanges() {
 			this.pendingAdd = []
 			this.pendingRemove = []
+			this.pasteReview = null
 			this.lastResult = null
 		},
 
@@ -369,7 +684,8 @@ export default {
 			const failedRemove = this.pendingRemove.filter((i) => i.status === 'error')
 
 			this.lastResult = {
-				succeededCount: tasks.length - failedAdd.length - failedRemove.length,
+				addedCount: this.pendingAdd.length - failedAdd.length,
+				removedCount: this.pendingRemove.length - failedRemove.length,
 				failed: [
 					...failedAdd.map((i) => ({ ...i, action: 'add' })),
 					...failedRemove.map((i) => ({ ...i, action: 'remove' })),
@@ -392,9 +708,23 @@ export default {
 </script>
 
 <style scoped>
+.gm-mm {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.gm-mm__scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding-bottom: 8px;
+}
+
 .gm-mm__header {
 	display: flex;
-	align-items: center;
+	align-items: baseline;
 	justify-content: space-between;
 	gap: 16px;
 	margin-bottom: 12px;
@@ -402,62 +732,243 @@ export default {
 
 .gm-mm__title {
 	margin: 0;
+	font-size: 16px;
 }
 
-.gm-mm__total {
-	color: var(--color-text-maxcontrast);
+.gm-mm__count {
+	margin-left: 8px;
+	font-size: 13px;
 	font-weight: normal;
+	color: var(--color-text-maxcontrast);
 }
 
 .gm-mm__search {
-	max-width: 260px;
+	max-width: 220px;
 }
 
+/* Single add field: user, whole group, or a pasted list. */
 .gm-mm__add {
-	margin-bottom: 12px;
-	max-width: 400px;
-}
-
-.gm-mm__add-uid {
-	margin-left: 6px;
-	color: var(--color-text-maxcontrast);
-	font-size: 12px;
-}
-
-.gm-mm__pending {
-	list-style: none;
-	margin: 0 0 12px;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.gm-mm__pending-row {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 4px 8px;
-	border-radius: var(--border-radius);
-	background: var(--color-primary-element-light);
+	height: 42px;
+	padding: 0 12px;
+	margin-bottom: 12px;
+	border: 1px solid var(--color-border-dark);
+	border-radius: var(--border-radius-large);
+	background: var(--color-main-background);
 }
 
-.gm-mm__pending-icon {
-	color: var(--color-primary-element);
+.gm-mm__add--open {
+	border-color: var(--color-primary-element);
+}
+
+.gm-mm__add-icon {
 	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
 }
 
-.gm-mm__pending-name {
+.gm-mm__add-input {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	border: none;
+	outline: none;
+	background: transparent;
+	font-family: inherit;
+	font-size: 14px;
+	color: var(--color-main-text);
+}
+
+.gm-mm__add-dropdown {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 4px);
+	left: 0;
+	right: 0;
+	max-height: 280px;
+	overflow-y: auto;
+	margin: 0;
+	padding: 4px;
+	list-style: none;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	box-shadow: 0 2px 12px var(--color-box-shadow);
+}
+
+.gm-mm__add-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.gm-mm__add-option {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border-radius: var(--border-radius);
+	cursor: pointer;
+}
+
+.gm-mm__add-option--active,
+.gm-mm__add-option:hover {
+	background: var(--color-background-hover);
+}
+
+.gm-mm__add-option-icon {
+	flex-shrink: 0;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-mm__add-option-name {
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	font-size: 14px;
 }
 
-.gm-mm__pending-error {
-	color: var(--color-error);
+.gm-mm__add-option-count {
+	flex-shrink: 0;
+	padding: 1px 7px;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+	font-size: 11px;
+	font-weight: bold;
+}
+
+.gm-mm__add-option-check {
+	flex-shrink: 0;
+	pointer-events: none;
+}
+
+.gm-mm__add-hint {
+	padding: 6px 10px 2px;
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+	font-style: italic;
+}
+
+/* Queue of chips — the single source of truth for what will happen on Apply. */
+.gm-mm__queue {
 	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+	margin-bottom: 12px;
+}
+
+.gm-mm__chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 6px 3px 9px;
+	border-radius: var(--border-radius-pill);
+	font-size: 13px;
+	border: 1px solid transparent;
+}
+
+.gm-mm__chip--add,
+.gm-mm__chip--add-group {
+	background: var(--color-success);
+	border-color: var(--color-success-hover);
+	color: var(--color-success-text);
+}
+
+.gm-mm__chip--remove {
+	background: var(--color-error);
+	border-color: var(--color-error-hover);
+	color: var(--color-error-text);
+}
+
+.gm-mm__chip-prefix {
+	font-weight: bold;
+}
+
+.gm-mm__chip-count {
+	margin-left: 4px;
+}
+
+.gm-mm__chip-error {
+	color: var(--color-error);
+}
+
+.gm-mm__chip-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: inherit;
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+	opacity: .75;
+}
+
+.gm-mm__chip-close:hover {
+	opacity: 1;
+	background: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.gm-mm__paste-review {
+	margin-bottom: 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	background: var(--color-background-hover);
+}
+
+.gm-mm__paste-review-summary {
+	margin: 0 0 6px;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.gm-mm__paste-review-list {
+	list-style: none;
+	margin: 0 0 6px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 120px;
+	overflow-y: auto;
+}
+
+.gm-mm__paste-review-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+}
+
+.gm-mm__paste-review-item--matched {
+	color: var(--color-success-text);
+}
+
+.gm-mm__paste-review-item--already {
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-mm__paste-review-item--unmatched {
+	color: var(--color-error-text);
+}
+
+.gm-mm__paste-review-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
 }
 
 .gm-mm__loading {
@@ -471,76 +982,107 @@ export default {
 }
 
 .gm-mm__grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(220px, 1fr));
-	gap: 2px 16px;
+	display: flex;
+	flex-direction: column;
+	max-width: 560px;
 	list-style: none;
 	margin: 0;
 	padding: 0;
 }
 
 .gm-mm__row {
+	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 4px;
-	padding: 2px 4px;
+	gap: 10px;
+	padding: 6px 26px 6px 2px;
 	border-radius: var(--border-radius);
 	min-width: 0;
 }
 
-.gm-mm__row--removing {
-	opacity: 0.5;
+.gm-mm__row:hover {
+	background: var(--color-background-hover);
 }
 
-.gm-mm__row--removing .gm-mm__row-name {
-	text-decoration: line-through;
-}
-
-.gm-mm__row-clickable {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	flex: 1;
-	min-width: 0;
-	padding: 2px 0;
-	cursor: pointer;
-}
-
-.gm-mm__row-icon {
+.gm-mm__row-avatar {
 	flex-shrink: 0;
-	color: var(--color-text-maxcontrast);
 }
 
 .gm-mm__row-name {
+	flex-shrink: 0;
+	max-width: 45%;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	font-size: 14px;
+}
+
+.gm-mm__row--leaving .gm-mm__row-name {
+	text-decoration: line-through;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-mm__row-meta {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: 12px;
+}
+
+.gm-mm__row-email {
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-mm__row-disabled-label {
+	color: var(--color-text-maxcontrast);
+	font-style: italic;
+}
+
+.gm-mm__row-leaving-label {
+	color: var(--color-error-text);
+}
+
+/* Reserved space so the × appearing on hover never shifts the layout. */
+.gm-mm__row-remove {
+	position: absolute;
+	right: 4px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 22px;
+	height: 22px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0;
+}
+
+.gm-mm__row:hover .gm-mm__row-remove,
+.gm-mm__row-remove:focus-visible {
+	opacity: 1;
+}
+
+.gm-mm__row-remove:hover {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
 }
 
 .gm-mm__more {
 	margin-top: 12px;
 }
 
-.gm-mm__actionbar {
-	position: sticky;
-	bottom: 0;
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	margin-top: 16px;
-	padding: 12px;
-	border-radius: var(--border-radius-large);
-	background: var(--color-main-background);
-	border: 1px solid var(--color-border);
-}
-
-.gm-mm__actionbar-summary {
-	flex: 1;
-	color: var(--color-text-maxcontrast);
-}
-
 .gm-mm__result {
-	margin-top: 16px;
+	flex-shrink: 0;
+	margin-top: 12px;
 }
 
 .gm-mm__result-list {

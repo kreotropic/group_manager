@@ -13,67 +13,88 @@
 		</NcNoteCard>
 
 		<template v-else-if="group">
-			<header class="gm-detail__header">
-				<Lan v-if="group.backend === 'ldap'" :size="28" class="gm-detail__icon" />
-				<AccountMultiple v-else :size="28" class="gm-detail__icon" />
+			<div class="gm-detail-panel__fixed">
+				<header class="gm-detail__header">
+					<div class="gm-detail__titles">
+						<h2 class="gm-detail__name">
+							<span class="gm-detail__name-text">{{ group.displayName }}</span>
+							<NcButton v-if="group.canRename"
+								variant="tertiary"
+								:aria-label="t('group_manager', 'Rename group')"
+								:title="t('group_manager', 'Rename group')"
+								@click="showRenameDialog = true">
+								<template #icon>
+									<Pencil :size="16" />
+								</template>
+							</NcButton>
+						</h2>
+						<p class="gm-detail__subtitle">{{ subtitleText }}</p>
+					</div>
 
-				<div class="gm-detail__titles">
-					<h2 class="gm-detail__name">
-						{{ group.displayName }}
-						<NcButton v-if="group.canRename"
-							variant="tertiary"
-							:aria-label="t('group_manager', 'Rename group')"
-							:title="t('group_manager', 'Rename group')"
-							@click="showRenameDialog = true">
-							<template #icon>
-								<Pencil :size="18" />
-							</template>
-						</NcButton>
-					</h2>
-					<p class="gm-detail__meta">
-						<span v-if="group.id !== group.displayName" class="gm-detail__gid">{{ group.id }}</span>
-						<span class="gm-badge" :class="'gm-badge--' + group.backend">
-							{{ group.backend === 'ldap' ? t('group_manager', 'LDAP') : t('group_manager', 'Local') }}
-						</span>
-					</p>
-				</div>
+					<button v-if="group.canDelete"
+						type="button"
+						class="gm-detail__delete"
+						@click="showDeleteDialog = true">
+						{{ t('group_manager', 'Delete group') }}
+					</button>
+				</header>
 
-				<NcButton v-if="group.canDelete"
-					variant="error"
-					@click="showDeleteDialog = true">
-					<template #icon>
-						<DeleteOutline :size="18" />
-					</template>
-					{{ t('group_manager', 'Delete') }}
-				</NcButton>
-			</header>
+				<NcNoteCard v-if="group.backend !== 'local'" type="info">
+					<p>{{ t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.') }}</p>
+					<p v-if="group.dn" class="gm-detail__dn">{{ group.dn }}</p>
+				</NcNoteCard>
 
-			<div class="gm-metrics">
-				<div class="gm-metric-card">
-					<span class="gm-metric-card__value">{{ group.memberCount ?? '—' }}</span>
-					<span class="gm-metric-card__label">{{ t('group_manager', 'Members') }}</span>
-				</div>
-				<div class="gm-metric-card">
-					<span class="gm-metric-card__value">{{ group.disabledCount ?? '—' }}</span>
-					<span class="gm-metric-card__label">{{ t('group_manager', 'Disabled members') }}</span>
-				</div>
-				<div class="gm-metric-card">
-					<span class="gm-metric-card__value">{{ group.subAdminCount ?? '—' }}</span>
-					<span class="gm-metric-card__label">{{ t('group_manager', 'Sub-admins') }}</span>
-				</div>
+				<nav v-if="showTabs" class="gm-detail__tabs">
+					<button type="button"
+						class="gm-detail__tab"
+						:class="{ 'gm-detail__tab--active': activeTab === 'members' }"
+						@click="activeTab = 'members'">
+						{{ t('group_manager', 'Members') }}
+						<span class="gm-detail__tab-count">{{ group.memberCount }}</span>
+						<span v-if="showMembersDot" class="gm-detail__tab-dot" />
+					</button>
+					<button type="button"
+						class="gm-detail__tab"
+						:class="{ 'gm-detail__tab--active': activeTab === 'folders' }"
+						@click="activeTab = 'folders'">
+						{{ t('group_manager', 'Folders') }}
+						<span class="gm-detail__tab-count">{{ group.folderCount }}</span>
+						<span v-if="showFoldersDot" class="gm-detail__tab-dot" />
+					</button>
+				</nav>
 			</div>
 
-			<NcNoteCard v-if="group.backend !== 'local'" type="info">
-				<p>{{ t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.') }}</p>
-				<p v-if="group.dn" class="gm-detail__dn">{{ group.dn }}</p>
-			</NcNoteCard>
+			<div class="gm-detail-panel__body">
+				<GroupMembersManager v-if="group.canAddUser || group.canRemoveUser"
+					v-show="!showTabs || activeTab === 'members'"
+					ref="membersManager"
+					:group-id="group.id"
+					class="gm-detail__tab-content"
+					@changed="onMembersChanged"
+					@pending-changed="onMembersPendingChanged" />
+				<GroupMembersList v-else v-show="!showTabs || activeTab === 'members'" :group-id="group.id" class="gm-detail__tab-content" />
 
-			<GroupMembersManager v-if="group.canAddUser || group.canRemoveUser"
-				:group-id="group.id"
-				class="gm-detail__members"
-				@changed="onMembersChanged"
-				@pending-changed="$emit('pending-changed', $event)" />
-			<GroupMembersList v-else :group-id="group.id" class="gm-detail__members" />
+				<GroupFoldersManager v-if="showTabs"
+					v-show="activeTab === 'folders'"
+					ref="foldersManager"
+					:group-id="group.id"
+					class="gm-detail__tab-content"
+					@changed="onFoldersChanged"
+					@pending-changed="onFoldersPendingChanged" />
+			</div>
+
+			<div v-if="showFooter" class="gm-detail-panel__footer" :class="{ 'gm-detail-panel__footer--disabled': !hasPendingChanges }">
+				<span class="gm-detail__footer-summary">{{ footerSummaryText }}</span>
+				<NcButton :disabled="!hasPendingChanges || applying" @click="discardAll">
+					{{ t('group_manager', 'Discard') }}
+				</NcButton>
+				<NcButton class="gm-detail__apply" variant="primary" :disabled="!hasPendingChanges || applying" @click="applyAll">
+					<template v-if="applying" #icon>
+						<NcLoadingIcon :size="18" />
+					</template>
+					{{ applying ? t('group_manager', 'Applying…') : t('group_manager', 'Apply') }}
+				</NcButton>
+			</div>
 
 			<RenameGroupDialog :open="showRenameDialog"
 				:group="group"
@@ -99,20 +120,20 @@
 </template>
 
 <script>
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import AccountMultiple from 'vue-material-design-icons/AccountMultiple.vue'
-import DeleteOutline from 'vue-material-design-icons/DeleteOutline.vue'
-import Lan from 'vue-material-design-icons/Lan.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
 import GroupMembersList from './GroupMembersList.vue'
 import GroupMembersManager from './GroupMembersManager.vue'
+import GroupFoldersManager from './GroupFoldersManager.vue'
 import { fetchGroup, deleteGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
+
+const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0 }
 
 export default {
 	name: 'GroupDetail',
@@ -122,13 +143,11 @@ export default {
 		NcDialog,
 		NcLoadingIcon,
 		NcNoteCard,
-		AccountMultiple,
-		DeleteOutline,
-		Lan,
 		Pencil,
 		RenameGroupDialog,
 		GroupMembersList,
 		GroupMembersManager,
+		GroupFoldersManager,
 	},
 
 	props: {
@@ -148,10 +167,78 @@ export default {
 			showRenameDialog: false,
 			showDeleteDialog: false,
 			deleteError: '',
+			activeTab: 'members',
+			membersPending: { ...EMPTY_PENDING },
+			foldersPending: { ...EMPTY_PENDING },
+			applying: false,
 		}
 	},
 
 	computed: {
+		subtitleText() {
+			if (!this.group) {
+				return ''
+			}
+			const parts = [
+				this.group.backend === 'ldap' ? t('group_manager', 'LDAP group') : t('group_manager', 'Local group'),
+			]
+			parts.push(this.group.memberCount
+				? n('group_manager', '%n member', '%n members', this.group.memberCount)
+				: t('group_manager', 'no members'))
+			if (this.group.disabledCount) {
+				parts.push(n('group_manager', '%n disabled', '%n disabled', this.group.disabledCount))
+			}
+			if (this.group.foldersEnabled) {
+				parts.push(this.group.folderCount
+					? n('group_manager', '%n folder', '%n folders', this.group.folderCount)
+					: t('group_manager', 'no folders'))
+			}
+			return parts.join(' · ')
+		},
+
+		showTabs() {
+			return !!this.group?.foldersEnabled
+		},
+
+		showMembersDot() {
+			return this.showTabs && this.activeTab !== 'members' && this.membersPending.hasPendingChanges
+		},
+
+		showFoldersDot() {
+			return this.showTabs && this.activeTab !== 'folders' && this.foldersPending.hasPendingChanges
+		},
+
+		hasPendingChanges() {
+			return this.membersPending.hasPendingChanges || this.foldersPending.hasPendingChanges
+		},
+
+		showFooter() {
+			return this.showTabs || this.group?.canAddUser || this.group?.canRemoveUser
+		},
+
+		footerSummaryText() {
+			if (!this.hasPendingChanges) {
+				return t('group_manager', 'No pending changes')
+			}
+			if (!this.showTabs) {
+				const parts = []
+				if (this.membersPending.joining > 0) {
+					parts.push(t('group_manager', '{count} joining', { count: this.membersPending.joining }))
+				}
+				if (this.membersPending.leaving > 0) {
+					parts.push(t('group_manager', '{count} leaving', { count: this.membersPending.leaving }))
+				}
+				return parts.join(' · ')
+			}
+			const membersText = this.membersPending.count > 0
+				? n('group_manager', '%n change in Members', '%n changes in Members', this.membersPending.count)
+				: t('group_manager', 'none in Members')
+			const foldersText = this.foldersPending.count > 0
+				? n('group_manager', '%n change in Folders', '%n changes in Folders', this.foldersPending.count)
+				: t('group_manager', 'none in Folders')
+			return membersText + ' · ' + foldersText
+		},
+
 		deleteWarning() {
 			if (!this.group) {
 				return ''
@@ -210,15 +297,56 @@ export default {
 		},
 
 		async onMembersChanged() {
-			// Silent refresh (no `loading` flag) — that would unmount the
-			// v-else-if="group" branch, including GroupMembersManager itself,
-			// wiping the just-applied result summary it's showing.
+			await this.refreshGroup()
+		},
+
+		async onFoldersChanged() {
+			await this.refreshGroup()
+		},
+
+		/**
+		 * Silent refresh (no `loading` flag) — that would unmount the
+		 * v-else-if="group" branch, including both tab managers, wiping
+		 * whichever one is showing its just-applied result summary.
+		 */
+		async refreshGroup() {
 			try {
 				this.group = await fetchGroup(this.groupId)
 				this.$emit('renamed', this.group)
 			} catch {
 				// Keep the stale summary rather than surface an error here —
-				// the member change itself already succeeded/reported.
+				// the change itself already succeeded/reported.
+			}
+		},
+
+		onMembersPendingChanged(payload) {
+			this.membersPending = payload
+			this.$emit('pending-changed', this.hasPendingChanges)
+		},
+
+		onFoldersPendingChanged(payload) {
+			this.foldersPending = payload
+			this.$emit('pending-changed', this.hasPendingChanges)
+		},
+
+		discardAll() {
+			this.$refs.membersManager?.discardChanges()
+			this.$refs.foldersManager?.discardChanges()
+		},
+
+		async applyAll() {
+			this.applying = true
+			try {
+				const tasks = []
+				if (this.membersPending.hasPendingChanges && this.$refs.membersManager) {
+					tasks.push(this.$refs.membersManager.applyChanges())
+				}
+				if (this.foldersPending.hasPendingChanges && this.$refs.foldersManager) {
+					tasks.push(this.$refs.foldersManager.applyChanges())
+				}
+				await Promise.all(tasks)
+			} finally {
+				this.applying = false
 			}
 		},
 
@@ -250,8 +378,10 @@ export default {
 .gm-detail-panel {
 	width: 100%;
 	height: 100%;
-	overflow-y: auto;
-	padding: 24px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	padding: 0 32px;
 }
 
 .gm-detail-panel__loading {
@@ -261,17 +391,22 @@ export default {
 	height: 100%;
 }
 
-.gm-detail__header {
-	display: flex;
-	align-items: flex-start;
-	gap: 12px;
-	margin-bottom: 20px;
+.gm-detail-panel__fixed {
+	flex-shrink: 0;
+	padding: 26px 0 20px;
 }
 
-.gm-detail__icon {
-	flex-shrink: 0;
-	margin-top: 4px;
-	color: var(--color-text-maxcontrast);
+.gm-detail-panel__body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+}
+
+.gm-detail__header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 8px;
 }
 
 .gm-detail__titles {
@@ -284,63 +419,35 @@ export default {
 	align-items: center;
 	gap: 4px;
 	margin: 0;
-}
-
-.gm-detail__meta {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin: 4px 0 0;
-	color: var(--color-text-maxcontrast);
-}
-
-.gm-detail__gid {
-	font-family: monospace;
-}
-
-.gm-badge {
-	display: inline-block;
-	padding: 2px 8px;
-	border-radius: var(--border-radius-pill);
-	font-size: 12px;
-	font-weight: bold;
-}
-
-.gm-badge--local {
-	background: var(--color-primary-element-light);
-	color: var(--color-primary-element-text);
-}
-
-.gm-badge--ldap,
-.gm-badge--other {
-	background: var(--color-background-darker);
-	color: var(--color-text-maxcontrast);
-}
-
-.gm-metrics {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-	gap: 12px;
-	margin-bottom: 20px;
-}
-
-.gm-metric-card {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	padding: 16px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large);
-}
-
-.gm-metric-card__value {
 	font-size: 24px;
-	font-weight: bold;
+	font-weight: 600;
 }
 
-.gm-metric-card__label {
+.gm-detail__name-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gm-detail__subtitle {
+	margin: 2px 0 0;
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-detail__delete {
+	flex-shrink: 0;
+	padding: 4px 2px;
+	border: none;
+	background: transparent;
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
+	cursor: pointer;
+}
+
+.gm-detail__delete:hover {
+	color: var(--color-error-text);
+	text-decoration: underline;
 }
 
 .gm-detail__dn {
@@ -349,8 +456,77 @@ export default {
 	word-break: break-all;
 }
 
-.gm-detail__members {
-	margin-top: 20px;
+.gm-detail__tabs {
+	display: flex;
+	gap: 22px;
+	margin-top: 12px;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.gm-detail__tab {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 0 0 10px;
+	border: none;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 14px;
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.gm-detail__tab--active {
+	margin-bottom: -1px;
+	border-bottom-color: var(--color-primary-element);
+	color: var(--color-main-text);
+	font-weight: 600;
+}
+
+.gm-detail__tab-count {
+	font-size: 12px;
+	color: var(--color-text-maxcontrast);
+	font-variant-numeric: tabular-nums;
+}
+
+.gm-detail__tab-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--color-primary-element);
+}
+
+.gm-detail__tab-content {
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+}
+
+.gm-detail-panel__footer {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 0 -32px;
+	padding: 10px 32px 14px;
+	border-top: 1px solid var(--color-border);
+	background: var(--color-background-hover);
+}
+
+.gm-detail-panel__footer--disabled {
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-detail__footer-summary {
+	flex: 1;
+	min-width: 0;
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-detail__apply {
+	border-radius: var(--border-radius-pill);
 }
 
 .gm-delete-dialog {

@@ -46,7 +46,21 @@ class GroupController extends Controller {
 
     public function candidates(string $gid, string $search = '', int $limit = 10): DataResponse {
         $gid = urldecode($gid);
-        return $this->guarded(fn () => new DataResponse(['candidates' => $this->groupService->searchCandidates($gid, $search, $limit)]));
+        return $this->guarded(fn () => new DataResponse($this->groupService->searchCandidates($gid, $search, $limit)));
+    }
+
+    public function expandGroup(string $gid, string $sourceGid): DataResponse {
+        $gid = urldecode($gid);
+        $sourceGid = urldecode($sourceGid);
+        return $this->guarded(fn () => new DataResponse(['members' => $this->groupService->expandGroupForAdd($gid, $sourceGid)]));
+    }
+
+    /**
+     * @param string[] $tokens
+     */
+    public function resolvePastedList(string $gid, array $tokens): DataResponse {
+        $gid = urldecode($gid);
+        return $this->guarded(fn () => new DataResponse(['results' => $this->groupService->resolvePastedTokens($gid, $tokens)]));
     }
 
     public function addMember(string $gid, string $uid): DataResponse {

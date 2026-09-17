@@ -61,13 +61,35 @@ export async function deleteGroup(gid) {
 }
 
 /**
- * Search users not already in the group, for the "add member" remote select.
+ * Search users AND groups not already fully represented in the group, for
+ * the single add field. Returns { users: [...], groups: [...] } — group
+ * entries carry newMemberCount (how many new people picking them would add).
  */
 export async function searchGroupCandidates(gid, search, limit = 10) {
 	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/candidates'), {
 		params: { search, limit },
 	})
-	return data.candidates
+	return data
+}
+
+/**
+ * Expand a "whole group" candidate into the individual members it would add
+ * (those not already in `gid`).
+ */
+export async function expandGroupForAdd(gid, sourceGid) {
+	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/expand-group'), {
+		params: { sourceGid },
+	})
+	return data.members
+}
+
+/**
+ * Resolve a pasted list of tokens (uid or email, one per line) against real
+ * accounts. Every token comes back once, matched or not.
+ */
+export async function resolvePastedList(gid, tokens) {
+	const { data } = await axios.post(base('/api/groups/' + encodeURIComponent(gid) + '/resolve-list'), { tokens })
+	return data.results
 }
 
 /**
@@ -85,5 +107,55 @@ export async function removeGroupMember(gid, uid) {
 	const { data } = await axios.delete(
 		base('/api/groups/' + encodeURIComponent(gid) + '/members/' + encodeURIComponent(uid)),
 	)
+	return data
+}
+
+/**
+ * Group folders already assigned to a group, with per-group permissions.
+ * Works for LDAP groups too — folder assignment isn't gated by backend.
+ */
+export async function fetchGroupFolders(gid) {
+	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/folders'))
+	return data.folders
+}
+
+/**
+ * Group folders NOT yet assigned to $gid, name-matching $search — the pool
+ * for the folder assignment field's dropdown.
+ */
+export async function searchAssignableFolders(gid, search, limit = 10) {
+	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/folders/search'), {
+		params: { search, limit },
+	})
+	return data.folders
+}
+
+/**
+ * Give a group access to a folder — defaults to full (write/share/delete)
+ * permissions, same default the groupfolders admin UI itself uses.
+ */
+export async function assignGroupFolder(gid, folderId) {
+	const { data } = await axios.post(base('/api/groups/' + encodeURIComponent(gid) + '/folders/' + folderId))
+	return data
+}
+
+/**
+ * Remove a group's access to a folder entirely.
+ */
+export async function unassignGroupFolder(gid, folderId) {
+	const { data } = await axios.delete(base('/api/groups/' + encodeURIComponent(gid) + '/folders/' + folderId))
+	return data
+}
+
+/**
+ * Set a group's write/share/delete permissions on a folder it already has
+ * access to. Read is always implied and isn't a toggle.
+ */
+export async function setGroupFolderPermissions(gid, folderId, { write, share, del }) {
+	const { data } = await axios.put(base('/api/groups/' + encodeURIComponent(gid) + '/folders/' + folderId + '/permissions'), {
+		write,
+		share,
+		delete: del,
+	})
 	return data
 }

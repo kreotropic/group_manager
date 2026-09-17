@@ -27,6 +27,7 @@ class GroupService {
         private IUserManager $userManager,
         private ISubAdmin $subAdmin,
         private ILDAPProviderFactory $ldapProviderFactory,
+        private FolderAssignmentService $folderAssignmentService,
     ) {
     }
 
@@ -43,7 +44,7 @@ class GroupService {
     }
 
     /**
-     * @return array{members: list<array{uid: string, displayName: string}>, total: int|null}
+     * @return array{members: list<array{uid: string, displayName: string, email: ?string, enabled: bool}>, total: int|null}
      */
     public function getMembers(string $gid, string $search = '', ?int $limit = null, int $offset = 0): array {
         $group = $this->requireGroup($gid);
@@ -51,21 +52,21 @@ class GroupService {
         $total = $group->count($search);
 
         return [
-            'members' => array_map(static fn ($user) => [
-                'uid' => $user->getUID(),
-                'displayName' => $user->getDisplayName(),
-            ], array_values($users)),
+            'members' => array_map(fn ($user) => $this->describeUser($user), array_values($users)),
             'total' => $total === false ? null : $total,
         ];
     }
 
     /**
-     * Users matching $search who are NOT already members of $gid — candidates
-     * for the "add member" remote-search select. Over-fetches from
-     * IUserManager::search() to absorb existing members filtered out, since
-     * there's no way to exclude them at the query level.
+     * Users AND groups matching $search, for the single add-field: users
+     * already members of $gid are excluded (over-fetches from
+     * IUserManager::search() to absorb them, since there's no way to exclude
+     * at the query level); the group itself and groups with zero addable
+     * members are excluded from the group side. Group results always carry
+     * the count of members they'd actually add (their size minus the overlap
+     * with $gid), never their raw size.
      *
-     * @return list<array{uid: string, displayName: string}>
+     * @return array{users: list<array{uid: string, displayName: string}>, groups: list<array{id: string, displayName: string, backend: string, newMemberCount: int}>}
      */
     public function searchCandidates(string $gid, string $search, int $limit = 10): array {
         $group = $this->requireGroup($gid);
@@ -74,21 +75,111 @@ class GroupService {
             $group->getUsers(),
         ));
 
-        $candidates = [];
+        $users = [];
         foreach ($this->userManager->search($search, $limit + count($existingUids), 0) as $user) {
             if (isset($existingUids[$user->getUID()])) {
                 continue;
             }
-            $candidates[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
-            if (count($candidates) >= $limit) {
+            $users[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+            if (count($users) >= $limit) {
                 break;
             }
         }
-        return $candidates;
+
+        $groups = [];
+        if ($search !== '') {
+            foreach ($this->groupManager->search($search) as $candidateGroup) {
+                if ($candidateGroup->getGID() === $gid) {
+                    continue;
+                }
+                $newMemberCount = 0;
+                foreach ($candidateGroup->getUsers() as $user) {
+                    if (!isset($existingUids[$user->getUID()])) {
+                        $newMemberCount++;
+                    }
+                }
+                if ($newMemberCount === 0) {
+                    continue;
+                }
+                $groups[] = [
+                    'id' => $candidateGroup->getGID(),
+                    'displayName' => $candidateGroup->getDisplayName(),
+                    'backend' => $this->describeBackend($candidateGroup)['backend'],
+                    'newMemberCount' => $newMemberCount,
+                ];
+                if (count($groups) >= $limit) {
+                    break;
+                }
+            }
+        }
+
+        return ['users' => $users, 'groups' => $groups];
     }
 
     /**
-     * @return array{uid: string, displayName: string}
+     * The members of $sourceGid that aren't already members of $gid — used
+     * when the admin picks "whole group" as a candidate in the add field, to
+     * expand it into individual add operations without the client having to
+     * fetch (and filter) potentially hundreds of members itself.
+     *
+     * @return list<array{uid: string, displayName: string}>
+     */
+    public function expandGroupForAdd(string $gid, string $sourceGid): array {
+        $group = $this->requireGroup($gid);
+        $sourceGroup = $this->requireGroup($sourceGid);
+
+        $existingUids = array_flip(array_map(
+            static fn ($user) => $user->getUID(),
+            $group->getUsers(),
+        ));
+
+        $newMembers = [];
+        foreach ($sourceGroup->getUsers() as $user) {
+            if (!isset($existingUids[$user->getUID()])) {
+                $newMembers[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+            }
+        }
+        return $newMembers;
+    }
+
+    /**
+     * Resolves a pasted list of tokens (one per line, uid or email) against
+     * real accounts. Each input token comes back exactly once, either
+     * matched (with the resolved user) or not — the caller decides what to
+     * do with unmatched tokens (surface them, let the admin fix and retry).
+     *
+     * @param list<string> $tokens
+     * @return list<array{token: string, matched: bool, uid: ?string, displayName: ?string}>
+     */
+    public function resolvePastedTokens(string $gid, array $tokens): array {
+        $this->requireGroup($gid);
+
+        $results = [];
+        foreach ($tokens as $token) {
+            $token = trim($token);
+            if ($token === '') {
+                continue;
+            }
+
+            $user = $this->userManager->get($token);
+            if ($user === null && str_contains($token, '@')) {
+                foreach ($this->userManager->search($token, 5, 0) as $candidate) {
+                    if (strcasecmp((string)$candidate->getEMailAddress(), $token) === 0) {
+                        $user = $candidate;
+                        break;
+                    }
+                }
+            }
+
+            $results[] = $user === null
+                ? ['token' => $token, 'matched' => false, 'uid' => null, 'displayName' => null]
+                : ['token' => $token, 'matched' => true, 'uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+        }
+        return $results;
+    }
+
+    /**
+     * @return array{uid: string, displayName: string, email: ?string, enabled: bool}
      */
     public function addMember(string $gid, string $uid): array {
         $group = $this->requireGroup($gid);
@@ -105,7 +196,7 @@ class GroupService {
         if (!$group->inGroup($user)) {
             $group->addUser($user);
         }
-        return ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+        return $this->describeUser($user);
     }
 
     public function removeMember(string $gid, string $uid): void {
@@ -220,6 +311,8 @@ class GroupService {
             'canAddUser' => $group->canAddUser(),
             'canRemoveUser' => $group->canRemoveUser(),
             'dn' => $this->resolveLdapDn($group),
+            'foldersEnabled' => $this->folderAssignmentService->isEnabled(),
+            'folderCount' => $this->folderAssignmentService->folderCount($group->getGID()),
         ];
     }
 
@@ -262,5 +355,34 @@ class GroupService {
 
     private function nullableCount(int|bool $count): ?int {
         return $count === false ? null : $count;
+    }
+
+    /**
+     * @return array{uid: string, displayName: string, email: ?string, enabled: bool}
+     */
+    private function describeUser(\OCP\IUser $user): array {
+        // $user is frequently an OC\User\LazyUser (returned by IGroup::searchUsers()
+        // et al.) which resolves the real backend user on first property access —
+        // if that backend is flaky right at this moment (an LDAP server hiccup,
+        // the account having just been deleted), getEMailAddress()/isEnabled()
+        // throw instead of returning a safe default. One member's backend being
+        // momentarily unreachable must not 500 the whole member list.
+        try {
+            $email = $user->getEMailAddress();
+        } catch (\Exception) {
+            $email = null;
+        }
+        try {
+            $enabled = $user->isEnabled();
+        } catch (\Exception) {
+            $enabled = true;
+        }
+
+        return [
+            'uid' => $user->getUID(),
+            'displayName' => $user->getDisplayName(),
+            'email' => $email,
+            'enabled' => $enabled,
+        ];
     }
 }
