@@ -5,59 +5,68 @@
 <template>
 	<div class="gm-fm">
 		<div class="gm-fm__scroll">
-			<div ref="addWrapper" class="gm-fm__add" :class="{ 'gm-fm__add--open': showDropdown }">
-				<Plus :size="18" class="gm-fm__add-icon" />
-				<input ref="addInput"
-					v-model="addQuery"
-					type="text"
-					class="gm-fm__add-input"
-					:placeholder="t('group_manager', 'Assign a group folder…')"
-					:aria-label="t('group_manager', 'Assign a group folder')"
-					@input="onAddInput"
-					@focus="onAddFocus"
-					@keydown.down.prevent="moveActive(1)"
-					@keydown.up.prevent="moveActive(-1)"
-					@keydown.enter.prevent="onAddEnter"
-					@keydown.esc="closeDropdown">
+			<div class="gm-fm__add-row">
+				<div ref="addWrapper" class="gm-fm__add" :class="{ 'gm-fm__add--open': showDropdown }">
+					<Plus :size="18" class="gm-fm__add-icon" />
+					<input ref="addInput"
+						v-model="addQuery"
+						type="text"
+						class="gm-fm__add-input"
+						:placeholder="t('group_manager', 'Assign a group folder…')"
+						:aria-label="t('group_manager', 'Assign a group folder')"
+						@input="onAddInput"
+						@focus="onAddFocus"
+						@keydown.down.prevent="moveActive(1)"
+						@keydown.up.prevent="moveActive(-1)"
+						@keydown.enter.prevent="onAddEnter"
+						@keydown.esc="closeDropdown">
 
-				<ul v-if="showDropdown" class="gm-fm__add-dropdown" role="listbox">
-					<li v-if="addSearching" class="gm-fm__add-status">
-						<NcLoadingIcon :size="16" />
-						{{ t('group_manager', 'Searching…') }}
-					</li>
-					<template v-else-if="addResults.length === 0">
-						<li class="gm-fm__add-status">
-							{{ addQuery.trim() === ''
-								? t('group_manager', 'No assignable folders')
-								: t('group_manager', 'No folders for "{term}"', { term: addQuery.trim() }) }}
+					<ul v-if="showDropdown" class="gm-fm__add-dropdown" role="listbox">
+						<li v-if="addSearching" class="gm-fm__add-status">
+							<NcLoadingIcon :size="16" />
+							{{ t('group_manager', 'Searching…') }}
 						</li>
-						<li class="gm-fm__add-hint">
-							{{ t('group_manager', 'Folders already assigned to this group don\'t show up here.') }}
-						</li>
+						<template v-else-if="addResults.length === 0">
+							<li class="gm-fm__add-status">
+								{{ addQuery.trim() === ''
+									? t('group_manager', 'No assignable folders')
+									: t('group_manager', 'No folders for "{term}"', { term: addQuery.trim() }) }}
+							</li>
+							<li class="gm-fm__add-hint">
+								{{ t('group_manager', 'Folders already assigned to this group don\'t show up here.') }}
+							</li>
+						</template>
+						<template v-else>
+							<li v-for="(option, index) in addResults"
+								:key="option.id"
+								class="gm-fm__add-option"
+								:class="{ 'gm-fm__add-option--active': index === activeIndex }"
+								role="option"
+								:aria-selected="isQueuedFolder(option.id)"
+								@mouseenter="activeIndex = index"
+								@mousedown.prevent
+								@click="pickFolder(option)">
+								<FolderOutline :size="17" class="gm-fm__add-option-icon" />
+								<span class="gm-fm__add-option-name">{{ option.mountPoint }}</span>
+								<input type="checkbox"
+									class="gm-fm__add-option-check"
+									tabindex="-1"
+									aria-hidden="true"
+									:checked="isQueuedFolder(option.id)">
+							</li>
+							<li class="gm-fm__add-hint">
+								{{ t('group_manager', 'Pick as many as you need, then press Esc') }}
+							</li>
+						</template>
+					</ul>
+				</div>
+
+				<NcButton class="gm-fm__create-folder" @click="showCreateFolderDialog = true">
+					<template #icon>
+						<Plus :size="18" />
 					</template>
-					<template v-else>
-						<li v-for="(option, index) in addResults"
-							:key="option.id"
-							class="gm-fm__add-option"
-							:class="{ 'gm-fm__add-option--active': index === activeIndex }"
-							role="option"
-							:aria-selected="isQueuedFolder(option.id)"
-							@mouseenter="activeIndex = index"
-							@mousedown.prevent
-							@click="pickFolder(option)">
-							<FolderOutline :size="17" class="gm-fm__add-option-icon" />
-							<span class="gm-fm__add-option-name">{{ option.mountPoint }}</span>
-							<input type="checkbox"
-								class="gm-fm__add-option-check"
-								tabindex="-1"
-								aria-hidden="true"
-								:checked="isQueuedFolder(option.id)">
-						</li>
-						<li class="gm-fm__add-hint">
-							{{ t('group_manager', 'Pick as many as you need, then press Esc') }}
-						</li>
-					</template>
-				</ul>
+					{{ t('group_manager', 'Create group folder') }}
+				</NcButton>
 			</div>
 
 			<div v-if="hasPendingChanges" class="gm-fm__queue" aria-live="polite">
@@ -226,17 +235,24 @@
 				{{ t('group_manager', 'Try again') }}
 			</NcButton>
 		</NcNoteCard>
+
+		<CreateGroupFolderDialog :open="showCreateFolderDialog"
+			:group-id="groupId"
+			@update:open="showCreateFolderDialog = $event"
+			@created="onFolderCreated" />
 	</div>
 </template>
 
 <script>
 import { translate as t } from '@nextcloud/l10n'
+import { showSuccess } from '@nextcloud/dialogs'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import AlertCircle from 'vue-material-design-icons/AlertCircle.vue'
 import FolderOutline from 'vue-material-design-icons/FolderOutline.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
+import CreateGroupFolderDialog from './CreateGroupFolderDialog.vue'
 import {
 	fetchGroupFolders,
 	searchAssignableFolders,
@@ -263,6 +279,7 @@ export default {
 		AlertCircle,
 		FolderOutline,
 		Plus,
+		CreateGroupFolderDialog,
 	},
 
 	props: {
@@ -278,6 +295,7 @@ export default {
 		return {
 			folders: [],
 			loading: true,
+			showCreateFolderDialog: false,
 
 			addQuery: '',
 			addSearching: false,
@@ -456,6 +474,13 @@ export default {
 			} finally {
 				this.loading = false
 			}
+		},
+
+		async onFolderCreated(folder) {
+			this.showCreateFolderDialog = false
+			await this.reload()
+			this.$emit('changed')
+			showSuccess(t('group_manager', 'Group folder "{name}" created.', { name: folder.mountPoint }))
 		},
 
 		formatQuota(row) {
@@ -724,16 +749,28 @@ export default {
 	padding-bottom: 8px;
 }
 
+.gm-fm__add-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 12px;
+}
+
 .gm-fm__add {
 	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	flex: 1;
+	min-width: 0;
 	height: 40px;
 	padding: 0 12px;
 	border: 1px solid var(--color-border);
 	border-radius: 8px;
-	margin-bottom: 12px;
+}
+
+.gm-fm__create-folder {
+	flex-shrink: 0;
 }
 
 .gm-fm__add--open {

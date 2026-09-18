@@ -13,6 +13,7 @@ use OCA\GroupManager\AppInfo\Application;
 use OCA\GroupManager\Service\FolderAssignmentService;
 use OCA\GroupManager\Service\GroupServiceException;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\Attribute\PasswordConfirmationRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\IRequest;
 
@@ -39,6 +40,19 @@ class GroupFolderController extends Controller {
     public function search(string $gid, string $search = '', int $limit = 10): DataResponse {
         $gid = urldecode($gid);
         return $this->guarded(fn () => new DataResponse(['folders' => $this->folderAssignmentService->searchAssignable($gid, $search, $limit)]));
+    }
+
+    /**
+     * Creates a brand-new group folder (not just assigning an existing one)
+     * and assigns it to $gid — the only endpoint in this app requiring a
+     * recent password confirmation, matching the bar the groupfolders app's
+     * own admin UI sets for the same operation (it creates real backing
+     * storage, unlike assign/permissions/quota which only touch metadata).
+     */
+    #[PasswordConfirmationRequired]
+    public function create(string $gid, string $mountPoint): DataResponse {
+        $gid = urldecode($gid);
+        return $this->guarded(fn () => new DataResponse($this->folderAssignmentService->createFolder($gid, $mountPoint)));
     }
 
     public function assign(string $gid, int $folderId): DataResponse {

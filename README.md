@@ -10,8 +10,9 @@ access from one screen — no more one-user-at-a-time from the Users page.**
 
 Group Manager gives administrators a single admin-settings screen to browse
 all groups on the instance (local and LDAP/AD), inspect and bulk-edit local
-group membership, and — when the Team Folders app is installed — assign group
-folders and their per-group permissions and quota, without leaving Settings.
+group membership, and — when the Team Folders app is installed — create or
+assign group folders and their per-group permissions and quota, without
+leaving Settings.
 
 ![Members](screenshots/1-members.png)
 
@@ -40,15 +41,17 @@ Manager is that screen.
   about to change, and a limited-concurrency batch applies it without
   aborting the whole batch over one bad row (a deleted account, say) — that
   one row surfaces its error and **Try again** retries only what failed.
-- **Group-folder assignment** (needs the **Team Folders** app) — a second tab
-  lists the group folders this group can reach, with per-group **Write /
-  Share / Delete** switches (read is always implied), the folder's quota
-  (editable — it belongs to the folder and is shared by every group with
-  access, and the UI says so), and a badge when a folder has advanced
+- **Group-folder creation & assignment** (needs the **Team Folders** app) — a
+  second tab lists the group folders this group can reach, with per-group
+  **Write / Share / Delete** switches (read is always implied), the folder's
+  quota (editable — it belongs to the folder and is shared by every group
+  with access, and the UI says so), and a badge when a folder has advanced
   permissions (ACL) turned on, since effective access can then be narrower
-  than the switches show. This works for LDAP groups too — group-folder
-  assignment isn't tied to how the group's *members* are managed, only
-  membership is.
+  than the switches show. A **Create group folder** button provisions a
+  brand-new folder and assigns it to the current group in one step —
+  Nextcloud asks you to confirm your password first, since this creates real
+  storage. This works for LDAP groups too — group-folder assignment isn't
+  tied to how the group's *members* are managed, only membership is.
 - **LDAP groups are read-only where they have to be** — you can't add or
   remove an LDAP group's members here (that's the directory's job), and the
   panel says so with the group's DN. Everything else — browsing, and folder

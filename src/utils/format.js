@@ -3,10 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import { getLanguage } from '@nextcloud/l10n'
+
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
 /**
- * "12,4 GB" — comma decimal to match pt-PT formatting used throughout the design.
+ * "12,4 GB" in pt-PT, "12.4 GB" in en, ... — decimal separator follows the
+ * session's own language instead of being hardcoded to one locale.
  *
  * @param {number} bytes
  */
@@ -17,6 +20,8 @@ export function humanSize(bytes) {
 		value /= 1024
 		unitIndex++
 	}
-	const formatted = unitIndex > 0 && value < 100 ? value.toFixed(1) : Math.round(value).toString()
-	return formatted.replace('.', ',') + ' ' + UNITS[unitIndex]
+	const formatted = new Intl.NumberFormat(getLanguage(), {
+		maximumFractionDigits: unitIndex > 0 && value < 100 ? 1 : 0,
+	}).format(value)
+	return formatted + ' ' + UNITS[unitIndex]
 }

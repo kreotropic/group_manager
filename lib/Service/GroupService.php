@@ -12,6 +12,7 @@ namespace OCA\GroupManager\Service;
 use OCP\Group\ISubAdmin;
 use OCP\IGroup;
 use OCP\IGroupManager;
+use OCP\IL10N;
 use OCP\IUserManager;
 use OCP\LDAP\ILDAPProviderFactory;
 
@@ -28,6 +29,7 @@ class GroupService {
         private ISubAdmin $subAdmin,
         private ILDAPProviderFactory $ldapProviderFactory,
         private FolderAssignmentService $folderAssignmentService,
+        private IL10N $l,
     ) {
     }
 
@@ -155,6 +157,9 @@ class GroupService {
      */
     public function resolvePastedTokens(string $gid, array $tokens): array {
         $this->requireGroup($gid);
+        if (count($tokens) > 500) {
+            throw new GroupServiceException($this->l->t('Too many entries pasted at once'), 'TOO_MANY_TOKENS', 400);
+        }
 
         $results = [];
         foreach ($tokens as $token) {
@@ -189,10 +194,10 @@ class GroupService {
 
         $user = $this->userManager->get($uid);
         if ($user === null) {
-            throw new GroupServiceException('User not found', 'USER_NOT_FOUND', 404);
+            throw new GroupServiceException($this->l->t('User not found'), 'USER_NOT_FOUND', 404);
         }
         if (!$group->canAddUser()) {
-            throw new GroupServiceException('Adding members is not supported by the backend', 'BACKEND_UNSUPPORTED', 400);
+            throw new GroupServiceException($this->l->t('Adding members is not supported by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
 
         if (!$group->inGroup($user)) {
@@ -207,10 +212,10 @@ class GroupService {
 
         $user = $this->userManager->get($uid);
         if ($user === null) {
-            throw new GroupServiceException('User not found', 'USER_NOT_FOUND', 404);
+            throw new GroupServiceException($this->l->t('User not found'), 'USER_NOT_FOUND', 404);
         }
         if (!$group->canRemoveUser()) {
-            throw new GroupServiceException('Removing members is not supported by the backend', 'BACKEND_UNSUPPORTED', 400);
+            throw new GroupServiceException($this->l->t('Removing members is not supported by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
 
         if ($group->inGroup($user)) {
@@ -221,15 +226,15 @@ class GroupService {
     public function createGroup(string $gid, string $displayName = ''): array {
         $gid = trim($gid);
         if ($gid === '') {
-            throw new GroupServiceException('Group ID cannot be empty', 'INVALID_GROUP_ID', 400);
+            throw new GroupServiceException($this->l->t('Group ID cannot be empty'), 'INVALID_GROUP_ID', 400);
         }
         if ($this->groupManager->groupExists($gid)) {
-            throw new GroupServiceException('A group with this ID already exists', 'GROUP_ALREADY_EXISTS', 409);
+            throw new GroupServiceException($this->l->t('A group with this ID already exists'), 'GROUP_ALREADY_EXISTS', 409);
         }
 
         $group = $this->groupManager->createGroup($gid);
         if ($group === null) {
-            throw new GroupServiceException('Group creation is not supported by the backend', 'BACKEND_UNSUPPORTED', 400);
+            throw new GroupServiceException($this->l->t('Group creation is not supported by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
 
         $displayName = trim($displayName);
@@ -246,11 +251,11 @@ class GroupService {
 
         $displayName = trim($displayName);
         if ($displayName === '') {
-            throw new GroupServiceException('Display name cannot be empty', 'INVALID_DISPLAY_NAME', 400);
+            throw new GroupServiceException($this->l->t('Display name cannot be empty'), 'INVALID_DISPLAY_NAME', 400);
         }
 
         if (!$group->setDisplayName($displayName)) {
-            throw new GroupServiceException('Rename was rejected by the backend', 'BACKEND_UNSUPPORTED', 400);
+            throw new GroupServiceException($this->l->t('Rename was rejected by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
 
         return $this->detail($group);
@@ -260,7 +265,7 @@ class GroupService {
         $group = $this->requireGroup($gid);
 
         if ($gid === 'admin') {
-            throw new GroupServiceException('The admin group cannot be deleted', 'ADMIN_GROUP_PROTECTED', 403);
+            throw new GroupServiceException($this->l->t('The admin group cannot be deleted'), 'ADMIN_GROUP_PROTECTED', 403);
         }
 
         // Group_LDAP also implements IDeleteGroupBackend (it "deletes" the local
@@ -270,26 +275,31 @@ class GroupService {
         $this->requireLocal($group, 'deleted');
 
         if (!$group->delete()) {
-            throw new GroupServiceException('Delete was rejected by the backend', 'BACKEND_UNSUPPORTED', 400);
+            throw new GroupServiceException($this->l->t('Delete was rejected by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
     }
 
     private function requireGroup(string $gid): IGroup {
         $group = $this->groupManager->get($gid);
         if ($group === null) {
-            throw new GroupServiceException('Group not found', 'GROUP_NOT_FOUND', 404);
+            throw new GroupServiceException($this->l->t('Group not found'), 'GROUP_NOT_FOUND', 404);
         }
         return $group;
     }
 
+    /**
+     * @param 'renamed'|'deleted'|'modified' $action
+     */
     private function requireLocal(IGroup $group, string $action): void {
-        if (!$this->describeBackend($group)['isLocal']) {
-            throw new GroupServiceException(
-                "Group is managed by an external backend and cannot be {$action} here",
-                'GROUP_NOT_LOCAL',
-                403,
-            );
+        if ($this->describeBackend($group)['isLocal']) {
+            return;
         }
+        $message = match ($action) {
+            'renamed' => $this->l->t('Group is managed by an external backend and cannot be renamed here'),
+            'deleted' => $this->l->t('Group is managed by an external backend and cannot be deleted here'),
+            default => $this->l->t('Group is managed by an external backend and cannot be modified here'),
+        };
+        throw new GroupServiceException($message, 'GROUP_NOT_LOCAL', 403);
     }
 
     private function summarize(IGroup $group): array {

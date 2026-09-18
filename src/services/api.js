@@ -131,6 +131,17 @@ export async function searchAssignableFolders(gid, search, limit = 10) {
 }
 
 /**
+ * Create a brand-new group folder and assign it to gid in the same step.
+ * Requires a recent password confirmation (see src/utils/confirmPassword
+ * usage in the calling dialog) — this creates real backing storage, unlike
+ * everything else in this file which only touches metadata.
+ */
+export async function createGroupFolder(gid, mountPoint) {
+	const { data } = await axios.post(base('/api/groups/' + encodeURIComponent(gid) + '/folders/create'), { mountPoint })
+	return data
+}
+
+/**
  * Give a group access to a folder — defaults to full (write/share/delete)
  * permissions, same default the groupfolders admin UI itself uses.
  */

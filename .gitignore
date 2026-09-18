@@ -6,3 +6,5 @@
 /js/*.map
 /.phpunit.result.cache
 /.claude/
+__pycache__/
+*.pyc

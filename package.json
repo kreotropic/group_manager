@@ -1,6 +1,6 @@
 {
 	"name": "group_manager",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Manage local and LDAP groups and their members from one screen",
 	"license": "AGPL-3.0-or-later",
 	"private": true,
@@ -13,6 +13,7 @@
 		"@nextcloud/axios": "^2.5.0",
 		"@nextcloud/dialogs": "^7.4.0",
 		"@nextcloud/l10n": "^3.4.0",
+		"@nextcloud/password-confirmation": "^6.1.0",
 		"@nextcloud/router": "^3.0.1",
 		"@nextcloud/vue": "^9.0.0",
 		"vue": "^3.5.0",

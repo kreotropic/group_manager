@@ -27,8 +27,9 @@ return [
         ['name' => 'group#destroy', 'url' => '/api/groups/{gid}', 'verb' => 'DELETE', 'requirements' => ['gid' => '[^/]+']],
 
         // folderId is constrained to digits so it never collides with the
-        // 'search' path segment regardless of declaration order.
+        // 'search'/'create' path segments regardless of declaration order.
         ['name' => 'group_folder#search', 'url' => '/api/groups/{gid}/folders/search', 'verb' => 'GET', 'requirements' => ['gid' => '[^/]+']],
+        ['name' => 'group_folder#create', 'url' => '/api/groups/{gid}/folders/create', 'verb' => 'POST', 'requirements' => ['gid' => '[^/]+']],
         ['name' => 'group_folder#index', 'url' => '/api/groups/{gid}/folders', 'verb' => 'GET', 'requirements' => ['gid' => '[^/]+']],
         ['name' => 'group_folder#assign', 'url' => '/api/groups/{gid}/folders/{folderId}', 'verb' => 'POST', 'requirements' => ['gid' => '[^/]+', 'folderId' => '\d+']],
         ['name' => 'group_folder#unassign', 'url' => '/api/groups/{gid}/folders/{folderId}', 'verb' => 'DELETE', 'requirements' => ['gid' => '[^/]+', 'folderId' => '\d+']],

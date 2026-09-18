@@ -11,6 +11,7 @@ namespace OCA\GroupManager\Service;
 
 use OCP\App\IAppManager;
 use OCP\Constants;
+use OCP\IL10N;
 use OCP\IUserSession;
 use OCP\Server;
 
@@ -35,6 +36,7 @@ class FolderAssignmentService {
     public function __construct(
         private IAppManager $appManager,
         private IUserSession $userSession,
+        private IL10N $l,
     ) {
     }
 
@@ -108,8 +110,42 @@ class FolderAssignmentService {
         $this->requireEnabled();
         $folder = $this->requireFolder($folderId);
         if ($this->groupHasAccess($folder, $gid)) {
-            throw new GroupServiceException('Group already has access to this folder', 'FOLDER_ALREADY_ASSIGNED', 409);
+            throw new GroupServiceException($this->l->t('Group already has access to this folder'), 'FOLDER_ALREADY_ASSIGNED', 409);
         }
+        $this->manager()->addApplicableGroup($folderId, $gid);
+        return $this->describeFolder($this->requireFolder($folderId), $gid);
+    }
+
+    /**
+     * Creates a brand-new group folder and immediately assigns it to $gid —
+     * creating one from a specific group's screen implies it's for that
+     * group, so a bare "create" with no assignment would just mean an extra
+     * manual step back here right after.
+     *
+     * @return array<string, mixed>
+     */
+    public function createFolder(string $gid, string $mountPoint): array {
+        $this->requireEnabled();
+        // Checked here, before trimMountpoint(): an empty/all-slashes string
+        // normalizes to '/' in that method, which it then returns early
+        // WITHOUT throwing (that path exists to let '/' mount a Team folder
+        // at the user's home) — trusting it alone would silently create a
+        // nonsense group folder mounted at the root instead of rejecting it.
+        if (trim($mountPoint) === '') {
+            throw new GroupServiceException($this->l->t('Invalid folder name'), 'INVALID_MOUNT_POINT', 400);
+        }
+        try {
+            $mountPoint = $this->manager()->trimMountpoint($mountPoint);
+        } catch (\OCP\AppFramework\OCS\OCSBadRequestException) {
+            throw new GroupServiceException($this->l->t('Invalid folder name'), 'INVALID_MOUNT_POINT', 400);
+        }
+        if ($mountPoint === '/') {
+            throw new GroupServiceException($this->l->t('Invalid folder name'), 'INVALID_MOUNT_POINT', 400);
+        }
+        if ($this->manager()->mountPointExists($mountPoint)) {
+            throw new GroupServiceException($this->l->t('A group folder with this name already exists'), 'FOLDER_ALREADY_EXISTS', 409);
+        }
+        $folderId = $this->manager()->createFolder($mountPoint);
         $this->manager()->addApplicableGroup($folderId, $gid);
         return $this->describeFolder($this->requireFolder($folderId), $gid);
     }
@@ -127,12 +163,9 @@ class FolderAssignmentService {
         $this->requireEnabled();
         $folder = $this->requireFolder($folderId);
         if (!$this->groupHasAccess($folder, $gid)) {
-            throw new GroupServiceException('Group does not have access to this folder', 'FOLDER_NOT_ASSIGNED', 404);
+            throw new GroupServiceException($this->l->t('Group does not have access to this folder'), 'FOLDER_NOT_ASSIGNED', 404);
         }
-        $permissions = self::PERM_READ
-            | ($write ? self::PERM_WRITE : 0)
-            | ($share ? self::PERM_SHARE : 0)
-            | ($delete ? self::PERM_DELETE : 0);
+        $permissions = $this->encodePermissions($write, $share, $delete);
         $this->manager()->setGroupPermissions($folderId, $gid, $permissions);
         return $this->describeFolder($this->requireFolder($folderId), $gid);
     }
@@ -146,9 +179,12 @@ class FolderAssignmentService {
      */
     public function setQuota(string $gid, int $folderId, int $quota): array {
         $this->requireEnabled();
+        if ($quota !== \OCP\Files\FileInfo::SPACE_UNLIMITED && $quota < 0) {
+            throw new GroupServiceException($this->l->t('Invalid quota value'), 'INVALID_QUOTA', 400);
+        }
         $folder = $this->requireFolder($folderId);
         if (!$this->groupHasAccess($folder, $gid)) {
-            throw new GroupServiceException('Group does not have access to this folder', 'FOLDER_NOT_ASSIGNED', 404);
+            throw new GroupServiceException($this->l->t('Group does not have access to this folder'), 'FOLDER_NOT_ASSIGNED', 404);
         }
         $this->manager()->setFolderQuota($folderId, $quota);
         return $this->describeFolder($this->requireFolder($folderId), $gid);
@@ -156,14 +192,14 @@ class FolderAssignmentService {
 
     private function requireEnabled(): void {
         if (!$this->isEnabled()) {
-            throw new GroupServiceException('Group folders app is not enabled', 'GROUPFOLDERS_DISABLED', 404);
+            throw new GroupServiceException($this->l->t('Group folders app is not enabled'), 'GROUPFOLDERS_DISABLED', 404);
         }
     }
 
     private function requireFolder(int $folderId): \OCA\GroupFolders\Folder\FolderWithMappingsAndCache {
         $folder = $this->manager()->getFolder($folderId);
         if ($folder === null) {
-            throw new GroupServiceException('Group folder not found', 'GROUP_FOLDER_NOT_FOUND', 404);
+            throw new GroupServiceException($this->l->t('Group folder not found'), 'GROUP_FOLDER_NOT_FOUND', 404);
         }
         return $folder;
     }
@@ -188,11 +224,29 @@ class FolderAssignmentService {
             'quota' => $folder->quota,
             'size' => $folder->rootCacheEntry->getSize(),
             'acl' => $folder->acl,
-            'permissions' => [
-                'write' => ($permissions & self::PERM_WRITE) === self::PERM_WRITE,
-                'share' => ($permissions & self::PERM_SHARE) === self::PERM_SHARE,
-                'delete' => ($permissions & self::PERM_DELETE) === self::PERM_DELETE,
-            ],
+            'permissions' => $this->decodePermissions($permissions),
+        ];
+    }
+
+    /**
+     * The permission bitmask math, isolated from the groupfolders DTO so it
+     * can be unit-tested without that app's classes being loadable.
+     */
+    private function encodePermissions(bool $write, bool $share, bool $delete): int {
+        return self::PERM_READ
+            | ($write ? self::PERM_WRITE : 0)
+            | ($share ? self::PERM_SHARE : 0)
+            | ($delete ? self::PERM_DELETE : 0);
+    }
+
+    /**
+     * @return array{write: bool, share: bool, delete: bool}
+     */
+    private function decodePermissions(int $permissions): array {
+        return [
+            'write' => ($permissions & self::PERM_WRITE) === self::PERM_WRITE,
+            'share' => ($permissions & self::PERM_SHARE) === self::PERM_SHARE,
+            'delete' => ($permissions & self::PERM_DELETE) === self::PERM_DELETE,
         ];
     }
 

@@ -9,9 +9,10 @@
 
 The app is feature-complete for its core purpose — browsing groups and
 bulk-editing local membership — and has grown a second major capability,
-group-folder assignment, that was not part of the original plan. It is not
-yet on the App Store and has no automated test suite; see **Next up** below.
-Everything in this section is already implemented and working:
+group-folder creation and assignment, that was not part of the original
+plan. It now has an automated test suite and CI; it is not yet on the App
+Store — see **Next up** below. Everything in this section is already
+implemented and working:
 
 ### Delivered
 
@@ -38,8 +39,11 @@ Everything in this section is already implemented and working:
   queued
 
 **Folders tab** (present only when the Team Folders app is installed)
-- Assign/unassign group folders to the selected group; per-group **Write /
-  Share / Delete** switches (read is always implied, never a fourth switch)
+- **Create a brand-new group folder** directly from this tab (password
+  confirmation required, since it provisions real storage), assigned to the
+  current group immediately — or assign/unassign an existing one
+- Per-group **Write / Share / Delete** switches (read is always implied,
+  never a fourth switch)
 - Folder quota shown and **editable** from here, with an explicit note that
   it is shared by every group with access to the folder
 - An ACL badge on folders with advanced permissions turned on, since
@@ -68,30 +72,23 @@ Everything in this section is already implemented and working:
 **Internationalization**
 - Full UI translated into English, Portuguese (Portugal), German, Spanish
   and French, with a coverage-checking build script (`build/l10n.py`)
+- Backend error messages (e.g. "Group not found") are translated via
+  `IL10N` too, not just the frontend strings
+
+**Quality & tooling**
+- PHPUnit test suite (`tests/Unit/`) covering `GroupService` and
+  `FolderAssignmentService` — the local/LDAP backend gate
+  (`requireLocal()`), the permission-bitmask math in
+  `FolderAssignmentService::setPermissions()`, and input validation
+- CI (`.github/workflows/ci.yml`): l10n coverage check, `php -l` + PHPUnit,
+  and a frontend build that also verifies the committed `js/` bundle is up
+  to date with `src/`
 
 ## Next up
 
 Roughly in priority order:
 
-### 1. Automated tests
-
-`composer.json` already declares `phpunit/phpunit`, but there is no `tests/`
-directory yet. `GroupService` and `FolderAssignmentService` are the two
-places worth covering first — the local/LDAP backend gate
-(`requireLocal()`), the permission-bitmask math in
-`FolderAssignmentService::setPermissions()`, and the "browse when empty,
-filter when typed" candidate search are all easy to get subtly wrong on a
-refactor and hard to catch by eye in review.
-
-### 2. CI
-
-No `.github/workflows/` yet. At minimum: run `php -l` / a static analyser
-over `lib/`, run `npm run build` to catch a broken frontend build, and run
-`python3 build/l10n.py --check` so a new UI string added without its English
-key (or a language quietly falling behind) fails the build instead of
-shipping silently untranslated.
-
-### 3. Accessibility contrast audit
+### 1. Accessibility contrast audit
 
 The redesigned UI (chip queue, tabs, the folders table) was built against
 Nextcloud's `--color-*` custom properties throughout, which should track
@@ -100,7 +97,7 @@ this has not been checked systematically against the 4.5:1 minimum for
 secondary text across every screen and both themes, only spot-checked
 during development.
 
-### 4. App Store publication
+### 2. App Store publication
 
 Package and sign a release once the above are in a comfortable state. No
 blockers identified so far — `info.xml` already declares the supported
@@ -108,13 +105,6 @@ Nextcloud range and PHP requirement.
 
 ## Post-launch — only if there's traction
 
-- **Backend-side error message translation.** API error strings (e.g. "Group
-  not found") are currently plain PHP strings, not run through `IL10N`, so
-  they stay in English regardless of the admin's language — consistent with
-  how the rest of the UI's error *handling* already works (the frontend
-  supplies a translated fallback message and only shows the raw backend
-  string when there is nothing better), but worth revisiting if it turns out
-  admins rely on reading the exact backend message.
 - **Bulk permission/quota edits across multiple folders at once**, the way
   Members already supports picking several people in one search — Folders
   currently queues one folder's permission or quota change at a time.

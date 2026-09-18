@@ -6,6 +6,9 @@
         "nextcloud/ocp": "^33.0",
         "phpunit/phpunit": "^10.0"
     },
+    "scripts": {
+        "test": "@php vendor/bin/phpunit -c phpunit.xml"
+    },
     "autoload": {
         "psr-4": {
             "OCA\\GroupManager\\": "lib/"

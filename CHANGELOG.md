@@ -8,6 +8,31 @@
 All notable changes to Group Manager are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- **Create group folders directly from a group's Folders tab** — a "Create
+  group folder" button provisions a brand-new folder and assigns it to the
+  current group in one step; Nextcloud asks for a password confirmation
+  first, matching the bar the Team Folders app's own admin screen sets for
+  the same operation.
+- **Automated test suite** (PHPUnit, `tests/Unit/`) and a CI workflow
+  (`.github/workflows/ci.yml`: l10n coverage, PHP lint + tests, frontend
+  build) — closing the two top items from the Roadmap.
+- Backend error messages (e.g. "Group not found") are now translated via
+  `IL10N` into all five supported languages, instead of always showing in
+  English regardless of the admin's own language.
+
+### Fixed
+- `setQuota()` and the pasted-member-list resolver now reject invalid input
+  (a negative quota other than "unlimited", more than 500 pasted entries in
+  one go) instead of passing it straight through to the backend.
+- `humanSize()` now formats numbers using the session's own language instead
+  of always using a comma decimal separator.
+- Creating a group folder with an empty or slashes-only name used to
+  silently create a folder mounted at the storage root instead of being
+  rejected — found while testing the creation feature above.
+
 ## [0.2.0] - 2026-09-18
 
 ### Added
