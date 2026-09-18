@@ -1,6 +1,6 @@
 {
 	"name": "group_manager",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Manage local and LDAP groups and their members from one screen",
 	"license": "AGPL-3.0-or-later",
 	"private": true,

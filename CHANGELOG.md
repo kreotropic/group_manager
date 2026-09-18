@@ -8,7 +8,7 @@
 All notable changes to Group Manager are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-18
 
 ### Added
 - **Create group folders directly from a group's Folders tab** — a "Create

@@ -8,3 +8,4 @@
 /.claude/
 __pycache__/
 *.pyc
+/build/artifacts/

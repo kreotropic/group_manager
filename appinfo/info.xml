@@ -22,7 +22,7 @@ folders and their per-group permissions and quota, without leaving Settings.
 - LDAP group membership stays read-only, as the directory is the source of truth; everything else
   works the same as for a local group.
     ]]></description>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <licence>AGPL-3.0-or-later</licence>
     <author mail="rsfneg@gmail.com">Ricardo Ferreira</author>
     <namespace>GroupManager</namespace>
