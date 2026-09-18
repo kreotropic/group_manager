@@ -6,10 +6,68 @@
 	<div class="gm-mm">
 		<div class="gm-mm__scroll">
 			<div class="gm-mm__header">
-				<h3 class="gm-mm__title">
+				<h3 v-if="!hideTitle" class="gm-mm__title">
 					{{ t('group_manager', 'Members') }}
 					<span v-if="total !== null" class="gm-mm__count">{{ headerCountText }}</span>
 				</h3>
+				<span v-else-if="hasPendingChanges" class="gm-mm__count">{{ afterApplyingText }}</span>
+
+				<div ref="addWrapper" class="gm-mm__add" :class="{ 'gm-mm__add--open': showDropdown }">
+					<Plus :size="18" class="gm-mm__add-icon" />
+					<input ref="addInput"
+						v-model="addQuery"
+						type="text"
+						class="gm-mm__add-input"
+						:placeholder="t('group_manager', 'Add a person, a whole group, or paste a list…')"
+						:aria-label="t('group_manager', 'Add a person, a whole group, or paste a list')"
+						@input="onAddInput"
+						@paste="onAddPaste"
+						@focus="onAddFocus"
+						@keydown.down.prevent="moveActive(1)"
+						@keydown.up.prevent="moveActive(-1)"
+						@keydown.enter.prevent="onAddEnter"
+						@keydown.esc="closeDropdown">
+
+					<ul v-if="showDropdown" class="gm-mm__add-dropdown" role="listbox">
+						<li v-if="addSearching" class="gm-mm__add-status">
+							<NcLoadingIcon :size="16" />
+							{{ t('group_manager', 'Searching…') }}
+						</li>
+						<template v-else-if="flatOptions.length === 0">
+							<li class="gm-mm__add-status">
+								{{ addQuery.trim() === ''
+									? t('group_manager', 'No addable users or groups')
+									: t('group_manager', 'No results for "{term}"', { term: addQuery.trim() }) }}
+							</li>
+						</template>
+						<template v-else>
+							<li v-for="(option, index) in flatOptions"
+								:key="option.key"
+								class="gm-mm__add-option"
+								:class="{ 'gm-mm__add-option--active': index === activeIndex }"
+								role="option"
+								:aria-selected="option.kind === 'user' && isQueuedUser(option.uid)"
+								@mouseenter="activeIndex = index"
+								@mousedown.prevent
+								@click="pickOption(option)">
+								<AccountGroup v-if="option.kind === 'group'" :size="18" class="gm-mm__add-option-icon" />
+								<AccountOutline v-else :size="18" class="gm-mm__add-option-icon" />
+								<span class="gm-mm__add-option-name">{{ option.displayName }}</span>
+								<span v-if="option.kind === 'group'" class="gm-mm__add-option-count">{{ option.newMemberCount }}</span>
+								<input v-else
+									type="checkbox"
+									class="gm-mm__add-option-check"
+									tabindex="-1"
+									aria-hidden="true"
+									:checked="isQueuedUser(option.uid)">
+							</li>
+							<li v-if="flatOptions.some((o) => o.kind === 'user')" class="gm-mm__add-hint">
+								{{ t('group_manager', 'Pick as many as you need, then press Esc') }}
+							</li>
+						</template>
+					</ul>
+				</div>
+
 				<NcTextField class="gm-mm__search"
 					v-model="memberSearch"
 					:label="t('group_manager', 'Filter members')"
@@ -20,61 +78,6 @@
 						<Magnify :size="18" />
 					</template>
 				</NcTextField>
-			</div>
-
-			<div class="gm-mm__add" :class="{ 'gm-mm__add--open': showDropdown }">
-				<Plus :size="18" class="gm-mm__add-icon" />
-				<input ref="addInput"
-					v-model="addQuery"
-					type="text"
-					class="gm-mm__add-input"
-					:placeholder="t('group_manager', 'Add a person, a whole group, or paste a list…')"
-					:aria-label="t('group_manager', 'Add a person, a whole group, or paste a list')"
-					@input="onAddInput"
-					@paste="onAddPaste"
-					@focus="onAddFocus"
-					@keydown.down.prevent="moveActive(1)"
-					@keydown.up.prevent="moveActive(-1)"
-					@keydown.enter.prevent="onAddEnter"
-					@keydown.esc="closeDropdown">
-
-				<ul v-if="showDropdown" class="gm-mm__add-dropdown" role="listbox">
-					<li v-if="addSearching" class="gm-mm__add-status">
-						<NcLoadingIcon :size="16" />
-						{{ t('group_manager', 'Searching…') }}
-					</li>
-					<template v-else-if="addQuery.trim().length === 0">
-						<li class="gm-mm__add-status">{{ t('group_manager', 'Type to search users and groups') }}</li>
-					</template>
-					<template v-else-if="flatOptions.length === 0">
-						<li class="gm-mm__add-status">{{ t('group_manager', 'No results for "{term}"', { term: addQuery.trim() }) }}</li>
-					</template>
-					<template v-else>
-						<li v-for="(option, index) in flatOptions"
-							:key="option.key"
-							class="gm-mm__add-option"
-							:class="{ 'gm-mm__add-option--active': index === activeIndex }"
-							role="option"
-							:aria-selected="option.kind === 'user' && isQueuedUser(option.uid)"
-							@mouseenter="activeIndex = index"
-							@mousedown.prevent
-							@click="pickOption(option)">
-							<AccountGroup v-if="option.kind === 'group'" :size="18" class="gm-mm__add-option-icon" />
-							<AccountOutline v-else :size="18" class="gm-mm__add-option-icon" />
-							<span class="gm-mm__add-option-name">{{ option.displayName }}</span>
-							<span v-if="option.kind === 'group'" class="gm-mm__add-option-count">{{ option.newMemberCount }}</span>
-							<input v-else
-								type="checkbox"
-								class="gm-mm__add-option-check"
-								tabindex="-1"
-								aria-hidden="true"
-								:checked="isQueuedUser(option.uid)">
-						</li>
-						<li v-if="flatOptions.some((o) => o.kind === 'user')" class="gm-mm__add-hint">
-							{{ t('group_manager', 'Pick as many as you need, then press Esc') }}
-						</li>
-					</template>
-				</ul>
 			</div>
 
 			<div v-if="hasPendingChanges" class="gm-mm__queue" aria-live="polite">
@@ -185,7 +188,7 @@
 				<summary>{{ t('group_manager', 'Show failure details') }}</summary>
 				<ul class="gm-mm__result-list">
 					<li v-for="f in lastResult.failed" :key="f.action + '-' + f.uid">
-						{{ f.displayName }} — {{ f.error }}
+						{{ f.displayName }}: {{ f.error }}
 					</li>
 				</ul>
 			</details>
@@ -245,6 +248,12 @@ export default {
 		groupId: {
 			type: String,
 			required: true,
+		},
+		// True when a tab above already shows "Members {count}" — the
+		// in-panel title would just repeat it.
+		hideTitle: {
+			type: Boolean,
+			default: false,
 		},
 	},
 
@@ -357,8 +366,16 @@ export default {
 			if (!this.hasPendingChanges) {
 				return t('group_manager', '{count} members', { count: current })
 			}
-			const after = current - this.pendingRemove.length + this.pendingAdd.length
-			return t('group_manager', '{current} members · {after} after applying', { current, after })
+			return t('group_manager', '{current} members · {after} after applying', { current, after: this.afterApplyingCount })
+		},
+
+		afterApplyingCount() {
+			const current = this.total ?? this.members.length
+			return current - this.pendingRemove.length + this.pendingAdd.length
+		},
+
+		afterApplyingText() {
+			return t('group_manager', '{after} after applying', { after: this.afterApplyingCount })
 		},
 
 		pasteReviewSummary() {
@@ -482,27 +499,36 @@ export default {
 		},
 
 		onDocumentClick(event) {
-			if (this.showDropdown && this.$el && !this.$el.contains(event.target)) {
+			// Scoped to the add field itself, not the whole panel — the
+			// dropdown now opens on a bare focus, so a broader root check
+			// would leave it open while clicking anywhere else in the member
+			// list/queue, which reads as "doesn't close".
+			if (this.showDropdown && this.$refs.addWrapper && !this.$refs.addWrapper.contains(event.target)) {
 				this.closeDropdown()
 			}
 		},
 
 		onAddFocus() {
-			if (this.addQuery.trim() !== '') {
-				this.showDropdown = true
+			this.showDropdown = true
+			if (this.addResults.users.length === 0 && this.addResults.groups.length === 0) {
+				this.runAddSearch()
 			}
 		},
 
 		onAddInput() {
-			clearTimeout(this.addSearchTimer)
 			this.activeIndex = -1
-			const term = this.addQuery.trim()
-			if (term === '') {
-				this.addResults = { users: [], groups: [] }
-				this.showDropdown = false
-				return
-			}
 			this.showDropdown = true
+			this.runAddSearch()
+		},
+
+		/**
+		 * Searches on every keystroke AND on an empty query — an empty term
+		 * browses all addable users alphabetically (server-sorted) instead of
+		 * showing nothing until the admin starts typing.
+		 */
+		runAddSearch() {
+			clearTimeout(this.addSearchTimer)
+			const term = this.addQuery.trim()
 			this.addSearching = true
 			this.addSearchTimer = setTimeout(async () => {
 				try {
@@ -724,26 +750,36 @@ export default {
 
 .gm-mm__header {
 	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 16px;
+	align-items: center;
+	gap: 12px;
 	margin-bottom: 12px;
 }
 
 .gm-mm__title {
+	flex-shrink: 0;
 	margin: 0;
 	font-size: 16px;
 }
 
 .gm-mm__count {
+	flex-shrink: 0;
 	margin-left: 8px;
 	font-size: 13px;
 	font-weight: normal;
 	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
 }
 
 .gm-mm__search {
-	max-width: 220px;
+	/* NcTextField sizes its wrapper, icon and label off this one variable —
+	   redefining it (rather than forcing height on each part separately)
+	   keeps them all correctly centered together at the taller size. */
+	--default-clickable-area: 42px;
+	flex: 1 1 0;
+	min-width: 0;
+	/* Its root also carries a 6px top margin (meant for stacking under a
+	   label in a form) — asymmetric margin skews flex centering. */
+	margin: 0 !important;
 }
 
 /* Single add field: user, whole group, or a pasted list. */
@@ -752,9 +788,10 @@ export default {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	flex: 1 1 0;
+	min-width: 0;
 	height: 42px;
 	padding: 0 12px;
-	margin-bottom: 12px;
 	border: 1px solid var(--color-border-dark);
 	border-radius: var(--border-radius-large);
 	background: var(--color-main-background);
@@ -906,6 +943,9 @@ export default {
 	justify-content: center;
 	width: 18px;
 	height: 18px;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
 	border: none;
 	border-radius: 50%;
 	background: transparent;
@@ -1053,13 +1093,16 @@ export default {
 	transform: translateY(-50%);
 	width: 22px;
 	height: 22px;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	border: none;
 	border-radius: 50%;
 	background: transparent;
-	color: var(--color-text-maxcontrast);
+	color: var(--color-error-text);
 	font-size: 16px;
 	line-height: 1;
 	cursor: pointer;
@@ -1072,8 +1115,7 @@ export default {
 }
 
 .gm-mm__row-remove:hover {
-	background: var(--color-background-dark);
-	color: var(--color-main-text);
+	background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .gm-mm__more {

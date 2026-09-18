@@ -81,10 +81,12 @@ class GroupService {
                 continue;
             }
             $users[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
-            if (count($users) >= $limit) {
-                break;
-            }
         }
+        // IUserManager::search() doesn't guarantee display-name order (an
+        // empty $search — used to browse candidates before typing — comes
+        // back ordered by backend/uid instead), so sort explicitly.
+        usort($users, static fn (array $a, array $b) => strnatcasecmp($a['displayName'], $b['displayName']));
+        $users = array_slice($users, 0, $limit);
 
         $groups = [];
         if ($search !== '') {

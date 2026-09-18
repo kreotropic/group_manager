@@ -5,7 +5,7 @@
 <template>
 	<div class="gm-fm">
 		<div class="gm-fm__scroll">
-			<div class="gm-fm__add" :class="{ 'gm-fm__add--open': showDropdown }">
+			<div ref="addWrapper" class="gm-fm__add" :class="{ 'gm-fm__add--open': showDropdown }">
 				<Plus :size="18" class="gm-fm__add-icon" />
 				<input ref="addInput"
 					v-model="addQuery"
@@ -28,10 +28,10 @@
 					<template v-else-if="addResults.length === 0">
 						<li class="gm-fm__add-status">
 							{{ addQuery.trim() === ''
-								? t('group_manager', 'Type to search group folders')
+								? t('group_manager', 'No assignable folders')
 								: t('group_manager', 'No folders for "{term}"', { term: addQuery.trim() }) }}
 						</li>
-						<li v-if="addQuery.trim() !== ''" class="gm-fm__add-hint">
+						<li class="gm-fm__add-hint">
 							{{ t('group_manager', 'Folders already assigned to this group don\'t show up here.') }}
 						</li>
 					</template>
@@ -41,11 +41,20 @@
 							class="gm-fm__add-option"
 							:class="{ 'gm-fm__add-option--active': index === activeIndex }"
 							role="option"
+							:aria-selected="isQueuedFolder(option.id)"
 							@mouseenter="activeIndex = index"
 							@mousedown.prevent
 							@click="pickFolder(option)">
 							<FolderOutline :size="17" class="gm-fm__add-option-icon" />
 							<span class="gm-fm__add-option-name">{{ option.mountPoint }}</span>
+							<input type="checkbox"
+								class="gm-fm__add-option-check"
+								tabindex="-1"
+								aria-hidden="true"
+								:checked="isQueuedFolder(option.id)">
+						</li>
+						<li class="gm-fm__add-hint">
+							{{ t('group_manager', 'Pick as many as you need, then press Esc') }}
 						</li>
 					</template>
 				</ul>
@@ -75,99 +84,131 @@
 			</div>
 
 			<p v-else-if="displayRows.length === 0" class="gm-fm__empty">
-				{{ t('group_manager', "This group has no folders assigned.") }}
+				{{ t('group_manager', 'This group has no folders assigned.') }}
 				<br>
 				{{ t('group_manager', 'Use the field above to give it access to an existing folder.') }}
 			</p>
 
-			<table v-else class="gm-fm__table">
-				<thead>
-					<tr>
-						<th class="gm-fm__col-name">{{ t('group_manager', 'Folder') }}</th>
-						<th class="gm-fm__col-quota">{{ t('group_manager', 'Quota') }}</th>
-						<th class="gm-fm__col-perm">{{ t('group_manager', 'Write') }}</th>
-						<th class="gm-fm__col-perm">{{ t('group_manager', 'Share') }}</th>
-						<th class="gm-fm__col-perm">{{ t('group_manager', 'Delete') }}</th>
-						<th class="gm-fm__col-spacer" />
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="row in displayRows"
-						:key="row.id"
-						class="gm-fm__row"
-						:class="{ 'gm-fm__row--leaving': row.pendingKind === 'unassign', 'gm-fm__row--changed': row.changed }">
-						<td class="gm-fm__col-name">
-							<FolderOutline :size="17" class="gm-fm__row-icon" :class="{ 'gm-fm__row-icon--new': row.pendingKind === 'assign' }" />
-							<span class="gm-fm__row-name" :class="{ 'gm-fm__row-name--new': row.pendingKind === 'assign' }">{{ row.mountPoint }}</span>
-							<span v-if="row.pendingKind === 'assign'" class="gm-fm__row-badge gm-fm__row-badge--new">{{ t('group_manager', 'new access') }}</span>
-							<span v-if="row.acl" class="gm-fm__row-badge gm-fm__row-badge--acl" :title="aclTooltip">{{ t('group_manager', 'ACL') }}</span>
-						</td>
-						<td class="gm-fm__col-quota">
-							<span v-if="row.pendingKind === 'unassign'" class="gm-fm__row-leaving-label">{{ t('group_manager', 'access will end') }}</span>
-							<span v-else class="gm-fm__row-quota">{{ formatQuota(row) }}</span>
-						</td>
-						<template v-if="row.pendingKind !== 'unassign'">
-							<td class="gm-fm__col-perm">
-								<div class="gm-fm__switch"
-									:class="{ 'gm-fm__switch--on': row.permissions.write, 'gm-fm__switch--disabled': row.pendingKind === 'assign' || applying }"
-									role="switch"
-									:tabindex="row.pendingKind === 'assign' || applying ? -1 : 0"
-									:aria-checked="row.permissions.write"
-									:aria-disabled="row.pendingKind === 'assign' || applying"
-									:aria-label="t('group_manager', 'Write access to {name}', { name: row.mountPoint })"
-									@click="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'write')"
-									@keydown.enter.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'write')"
-									@keydown.space.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'write')">
-									<span class="gm-fm__switch-knob" />
-								</div>
-							</td>
-							<td class="gm-fm__col-perm">
-								<div class="gm-fm__switch"
-									:class="{ 'gm-fm__switch--on': row.permissions.share, 'gm-fm__switch--disabled': row.pendingKind === 'assign' || applying }"
-									role="switch"
-									:tabindex="row.pendingKind === 'assign' || applying ? -1 : 0"
-									:aria-checked="row.permissions.share"
-									:aria-disabled="row.pendingKind === 'assign' || applying"
-									:aria-label="t('group_manager', 'Share access to {name}', { name: row.mountPoint })"
-									@click="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'share')"
-									@keydown.enter.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'share')"
-									@keydown.space.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'share')">
-									<span class="gm-fm__switch-knob" />
-								</div>
-							</td>
-							<td class="gm-fm__col-perm">
-								<div class="gm-fm__switch"
-									:class="{ 'gm-fm__switch--on': row.permissions.delete, 'gm-fm__switch--disabled': row.pendingKind === 'assign' || applying }"
-									role="switch"
-									:tabindex="row.pendingKind === 'assign' || applying ? -1 : 0"
-									:aria-checked="row.permissions.delete"
-									:aria-disabled="row.pendingKind === 'assign' || applying"
-									:aria-label="t('group_manager', 'Delete access to {name}', { name: row.mountPoint })"
-									@click="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'delete')"
-									@keydown.enter.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'delete')"
-									@keydown.space.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'delete')">
-									<span class="gm-fm__switch-knob" />
-								</div>
-							</td>
-						</template>
-						<td v-else class="gm-fm__col-perm" colspan="3" />
-						<td class="gm-fm__col-spacer">
-							<button v-if="row.pendingKind !== 'unassign'"
+			<div v-else class="gm-fm__table" role="table">
+				<div class="gm-fm__row gm-fm__row--head" role="row">
+					<span class="gm-fm__col-name" role="columnheader">{{ t('group_manager', 'Folder') }}</span>
+					<span class="gm-fm__col-quota" role="columnheader">{{ t('group_manager', 'Quota') }}</span>
+					<span class="gm-fm__col-perm" role="columnheader">{{ t('group_manager', 'Write') }}</span>
+					<span class="gm-fm__col-perm" role="columnheader">{{ t('group_manager', 'Share') }}</span>
+					<span class="gm-fm__col-perm" role="columnheader">{{ t('group_manager', 'Delete') }}</span>
+					<span class="gm-fm__col-spacer" role="columnheader" />
+				</div>
+				<div v-for="row in displayRows"
+					:key="row.id"
+					class="gm-fm__row"
+					role="row"
+					:class="{ 'gm-fm__row--leaving': row.pendingKind === 'unassign', 'gm-fm__row--changed': row.changed }">
+					<span class="gm-fm__col-name" role="cell">
+						<FolderOutline :size="17" class="gm-fm__row-icon" :class="{ 'gm-fm__row-icon--new': row.pendingKind === 'assign' }" />
+						<span class="gm-fm__row-name" :class="{ 'gm-fm__row-name--new': row.pendingKind === 'assign' }">{{ row.mountPoint }}</span>
+						<span v-if="row.pendingKind === 'assign'" class="gm-fm__row-badge gm-fm__row-badge--new">{{ t('group_manager', 'new access') }}</span>
+						<span v-if="row.acl" class="gm-fm__row-badge gm-fm__row-badge--acl" :title="aclTooltip">{{ t('group_manager', 'ACL') }}</span>
+					</span>
+					<span class="gm-fm__col-quota" role="cell">
+						<span v-if="row.pendingKind === 'unassign'" class="gm-fm__row-leaving-label">{{ t('group_manager', 'access will end') }}</span>
+						<span v-else-if="row.pendingKind === 'assign'" class="gm-fm__row-quota">{{ formatQuota(row) }}</span>
+						<button v-else
+							type="button"
+							class="gm-fm__quota-edit"
+							:class="{ 'gm-fm__quota-edit--changed': quotaOverrides[row.id] }"
+							:aria-label="t('group_manager', 'Edit quota for {name}', { name: row.mountPoint })"
+							@click="toggleQuotaEditor(row)">
+							{{ formatQuota(row) }}
+						</button>
+
+						<div v-if="editingQuotaId === row.id" class="gm-fm__quota-popover">
+							<button v-for="preset in quotaPresets"
+								:key="preset.value"
 								type="button"
-								class="gm-fm__row-remove"
-								:aria-label="t('group_manager', 'Remove access to {name}', { name: row.mountPoint })"
-								:disabled="applying"
-								@click="removeRow(row)">
-								×
+								class="gm-fm__quota-option"
+								:class="{ 'gm-fm__quota-option--active': row.quota === preset.value }"
+								@click="pickQuota(row, preset.value)">
+								{{ preset.label }}
 							</button>
-						</td>
-					</tr>
-				</tbody>
-			</table>
+							<div class="gm-fm__quota-custom">
+								<input v-model.number="customQuotaGb"
+									type="number"
+									min="0"
+									step="1"
+									class="gm-fm__quota-custom-input"
+									:placeholder="t('group_manager', 'Custom (GB)')"
+									@keydown.enter.prevent="applyCustomQuota(row)">
+								<button type="button" class="gm-fm__quota-custom-apply" @click="applyCustomQuota(row)">
+									{{ t('group_manager', 'Set') }}
+								</button>
+							</div>
+						</div>
+					</span>
+					<template v-if="row.pendingKind !== 'unassign'">
+						<span class="gm-fm__col-perm" role="cell">
+							<div class="gm-fm__switch"
+								:class="{ 'gm-fm__switch--on': row.permissions.write, 'gm-fm__switch--disabled': row.pendingKind === 'assign' || applying }"
+								role="switch"
+								:tabindex="row.pendingKind === 'assign' || applying ? -1 : 0"
+								:aria-checked="row.permissions.write"
+								:aria-disabled="row.pendingKind === 'assign' || applying"
+								:aria-label="t('group_manager', 'Write access to {name}', { name: row.mountPoint })"
+								@click="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'write')"
+								@keydown.enter.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'write')"
+								@keydown.space.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'write')">
+								<span class="gm-fm__switch-knob" />
+							</div>
+						</span>
+						<span class="gm-fm__col-perm" role="cell">
+							<div class="gm-fm__switch"
+								:class="{ 'gm-fm__switch--on': row.permissions.share, 'gm-fm__switch--disabled': row.pendingKind === 'assign' || applying }"
+								role="switch"
+								:tabindex="row.pendingKind === 'assign' || applying ? -1 : 0"
+								:aria-checked="row.permissions.share"
+								:aria-disabled="row.pendingKind === 'assign' || applying"
+								:aria-label="t('group_manager', 'Share access to {name}', { name: row.mountPoint })"
+								@click="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'share')"
+								@keydown.enter.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'share')"
+								@keydown.space.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'share')">
+								<span class="gm-fm__switch-knob" />
+							</div>
+						</span>
+						<span class="gm-fm__col-perm" role="cell">
+							<div class="gm-fm__switch"
+								:class="{ 'gm-fm__switch--on': row.permissions.delete, 'gm-fm__switch--disabled': row.pendingKind === 'assign' || applying }"
+								role="switch"
+								:tabindex="row.pendingKind === 'assign' || applying ? -1 : 0"
+								:aria-checked="row.permissions.delete"
+								:aria-disabled="row.pendingKind === 'assign' || applying"
+								:aria-label="t('group_manager', 'Delete access to {name}', { name: row.mountPoint })"
+								@click="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'delete')"
+								@keydown.enter.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'delete')"
+								@keydown.space.prevent="row.pendingKind !== 'assign' && !applying && togglePermission(row, 'delete')">
+								<span class="gm-fm__switch-knob" />
+							</div>
+						</span>
+					</template>
+					<template v-else>
+						<span class="gm-fm__col-perm" role="cell" />
+						<span class="gm-fm__col-perm" role="cell" />
+						<span class="gm-fm__col-perm" role="cell" />
+					</template>
+					<span class="gm-fm__col-spacer" role="cell">
+						<button v-if="row.pendingKind !== 'unassign'"
+							type="button"
+							class="gm-fm__row-remove"
+							:aria-label="t('group_manager', 'Remove access to {name}', { name: row.mountPoint })"
+							:disabled="applying"
+							@click="removeRow(row)">
+							×
+						</button>
+					</span>
+				</div>
+			</div>
 
 			<p class="gm-fm__note">
 				{{ t('group_manager', 'Read access is always on.') }}
-				{{ t('group_manager', "Quota belongs to the folder and is shared by every group with access to it — it isn't editable here.") }}
+				{{ t('group_manager', 'Quota is shared by every group with access to this folder. Changing it here affects them all.') }}
 			</p>
 		</div>
 
@@ -177,7 +218,7 @@
 				<summary>{{ t('group_manager', 'Show failure details') }}</summary>
 				<ul class="gm-fm__result-list">
 					<li v-for="f in lastResult.failed" :key="f.action + '-' + f.id">
-						{{ f.mountPoint }} — {{ f.error }}
+						{{ f.mountPoint }}: {{ f.error }}
 					</li>
 				</ul>
 			</details>
@@ -202,6 +243,7 @@ import {
 	assignGroupFolder,
 	unassignGroupFolder,
 	setGroupFolderPermissions,
+	setGroupFolderQuota,
 } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 import { runWithConcurrency } from '../utils/concurrency.js'
@@ -250,6 +292,10 @@ export default {
 			pendingUnassign: [],
 			// folderId -> {write, share, delete, status, error}
 			permissionOverrides: {},
+			// folderId -> {quota, status, error}
+			quotaOverrides: {},
+			editingQuotaId: null,
+			customQuotaGb: null,
 
 			applying: false,
 			lastResult: null,
@@ -261,14 +307,28 @@ export default {
 			return this.pendingAssign.length > 0
 				|| this.pendingUnassign.length > 0
 				|| Object.keys(this.permissionOverrides).length > 0
+				|| Object.keys(this.quotaOverrides).length > 0
 		},
 
 		pendingCount() {
-			return this.pendingAssign.length + this.pendingUnassign.length + Object.keys(this.permissionOverrides).length
+			return this.pendingAssign.length + this.pendingUnassign.length
+				+ Object.keys(this.permissionOverrides).length + Object.keys(this.quotaOverrides).length
+		},
+
+		quotaPresets() {
+			const GB = 1024 * 1024 * 1024
+			return [
+				{ value: UNLIMITED_QUOTA, label: t('group_manager', 'Unlimited') },
+				{ value: 1 * GB, label: '1 GB' },
+				{ value: 5 * GB, label: '5 GB' },
+				{ value: 10 * GB, label: '10 GB' },
+				{ value: 50 * GB, label: '50 GB' },
+				{ value: 100 * GB, label: '100 GB' },
+			]
 		},
 
 		aclTooltip() {
-			return t('group_manager', 'Advanced permissions are on for this folder — effective access can be more restrictive than these switches show.')
+			return t('group_manager', 'Advanced permissions are on for this folder. Effective access can be more restrictive than these switches show.')
 		},
 
 		queueChips() {
@@ -299,12 +359,14 @@ export default {
 		displayRows() {
 			const unassignIds = new Set(this.pendingUnassign.map((i) => i.id))
 			const assigned = this.folders.map((folder) => {
-				const override = this.permissionOverrides[folder.id]
+				const permOverride = this.permissionOverrides[folder.id]
+				const quotaOverride = this.quotaOverrides[folder.id]
 				return {
 					...folder,
-					permissions: override ? { write: override.write, share: override.share, delete: override.delete } : folder.permissions,
+					quota: quotaOverride ? quotaOverride.quota : folder.quota,
+					permissions: permOverride ? { write: permOverride.write, share: permOverride.share, delete: permOverride.delete } : folder.permissions,
 					pendingKind: unassignIds.has(folder.id) ? 'unassign' : null,
-					changed: !!override,
+					changed: !!permOverride || !!quotaOverride,
 				}
 			})
 			const pending = this.pendingAssign.map((i) => ({
@@ -333,6 +395,9 @@ export default {
 			}
 			if (this.lastResult.permissionCount > 0) {
 				parts.push(t('group_manager', '{count} permission change(s)', { count: this.lastResult.permissionCount }))
+			}
+			if (this.lastResult.quotaCount > 0) {
+				parts.push(t('group_manager', '{count} quota change(s)', { count: this.lastResult.quotaCount }))
 			}
 			if (this.lastResult.failed.length > 0) {
 				parts.push(t('group_manager', '{count} failed', { count: this.lastResult.failed.length }))
@@ -379,6 +444,8 @@ export default {
 			this.pendingAssign = []
 			this.pendingUnassign = []
 			this.permissionOverrides = {}
+			this.quotaOverrides = {}
+			this.editingQuotaId = null
 			this.lastResult = null
 		},
 
@@ -400,21 +467,34 @@ export default {
 		},
 
 		onDocumentClick(event) {
-			if (this.showDropdown && this.$el && !this.$el.contains(event.target)) {
+			if (this.showDropdown && this.$refs.addWrapper && !this.$refs.addWrapper.contains(event.target)) {
 				this.closeDropdown()
+			}
+			if (this.editingQuotaId !== null && !event.target.closest('.gm-fm__col-quota')) {
+				this.editingQuotaId = null
 			}
 		},
 
 		onAddFocus() {
-			if (this.addQuery.trim() !== '') {
-				this.showDropdown = true
+			this.showDropdown = true
+			if (this.addResults.length === 0) {
+				this.runAddSearch()
 			}
 		},
 
 		onAddInput() {
-			clearTimeout(this.addSearchTimer)
 			this.activeIndex = -1
 			this.showDropdown = true
+			this.runAddSearch()
+		},
+
+		/**
+		 * Searches on every keystroke AND on an empty query — an empty term
+		 * browses all assignable folders alphabetically instead of showing
+		 * nothing until the admin starts typing.
+		 */
+		runAddSearch() {
+			clearTimeout(this.addSearchTimer)
 			this.addSearching = true
 			this.addSearchTimer = setTimeout(async () => {
 				try {
@@ -444,8 +524,17 @@ export default {
 			}
 		},
 
+		isQueuedFolder(id) {
+			return this.pendingAssign.some((i) => i.id === id)
+		},
+
+		/**
+		 * Toggling (instead of assign-and-close) lets several folders picked
+		 * from the same search be queued without re-opening and re-typing.
+		 */
 		pickFolder(folder) {
-			if (this.pendingAssign.some((i) => i.id === folder.id)) {
+			if (this.isQueuedFolder(folder.id)) {
+				this.pendingAssign = this.pendingAssign.filter((i) => i.id !== folder.id)
 				return
 			}
 			this.pendingAssign.push({
@@ -457,9 +546,6 @@ export default {
 				status: 'pending',
 				error: '',
 			})
-			this.addQuery = ''
-			this.addResults = []
-			this.closeDropdown()
 		},
 
 		cancelChip(chip) {
@@ -491,13 +577,48 @@ export default {
 				const { [row.id]: _drop, ...rest } = this.permissionOverrides
 				this.permissionOverrides = rest
 			}
+			if (this.quotaOverrides[row.id]) {
+				const { [row.id]: _drop, ...rest } = this.quotaOverrides
+				this.quotaOverrides = rest
+			}
 			this.pendingUnassign.push({ id: row.id, mountPoint: row.mountPoint, status: 'pending', error: '' })
+		},
+
+		toggleQuotaEditor(row) {
+			this.editingQuotaId = this.editingQuotaId === row.id ? null : row.id
+			this.customQuotaGb = null
+		},
+
+		pickQuota(row, value) {
+			this.setQuotaOverride(row, value)
+			this.editingQuotaId = null
+		},
+
+		applyCustomQuota(row) {
+			const gb = Number(this.customQuotaGb)
+			if (!gb || gb <= 0) {
+				return
+			}
+			this.setQuotaOverride(row, Math.round(gb * 1024 * 1024 * 1024))
+			this.editingQuotaId = null
+		},
+
+		setQuotaOverride(row, quota) {
+			const original = this.folders.find((f) => f.id === row.id)?.quota
+			if (original === quota) {
+				const { [row.id]: _drop, ...rest } = this.quotaOverrides
+				this.quotaOverrides = rest
+			} else {
+				this.quotaOverrides = { ...this.quotaOverrides, [row.id]: { quota, status: 'pending', error: '' } }
+			}
 		},
 
 		discardChanges() {
 			this.pendingAssign = []
 			this.pendingUnassign = []
 			this.permissionOverrides = {}
+			this.quotaOverrides = {}
+			this.editingQuotaId = null
 			this.lastResult = null
 		},
 
@@ -519,7 +640,17 @@ export default {
 					error: '',
 				},
 			}))
-			const tasks = [...assignTasks, ...unassignTasks, ...permissionTasks]
+			const quotaTasks = Object.entries(this.quotaOverrides).map(([id, override]) => ({
+				kind: 'quota',
+				item: {
+					id: Number(id),
+					mountPoint: this.folders.find((f) => f.id === Number(id))?.mountPoint ?? '',
+					quota: override.quota,
+					status: 'pending',
+					error: '',
+				},
+			}))
+			const tasks = [...assignTasks, ...unassignTasks, ...permissionTasks, ...quotaTasks]
 
 			await runWithConcurrency(tasks, APPLY_CONCURRENCY, async ({ kind, item }) => {
 				try {
@@ -527,8 +658,10 @@ export default {
 						await assignGroupFolder(this.groupId, item.id)
 					} else if (kind === 'unassign') {
 						await unassignGroupFolder(this.groupId, item.id)
-					} else {
+					} else if (kind === 'permissions') {
 						await setGroupFolderPermissions(this.groupId, item.id, { write: item.write, share: item.share, del: item.delete })
+					} else {
+						await setGroupFolderQuota(this.groupId, item.id, item.quota)
 					}
 					item.status = 'done'
 				} catch (err) {
@@ -540,15 +673,18 @@ export default {
 			const failedAssign = assignTasks.map((task) => task.item).filter((i) => i.status === 'error')
 			const failedUnassign = unassignTasks.map((task) => task.item).filter((i) => i.status === 'error')
 			const failedPermissions = permissionTasks.map((task) => task.item).filter((i) => i.status === 'error')
+			const failedQuota = quotaTasks.map((task) => task.item).filter((i) => i.status === 'error')
 
 			this.lastResult = {
 				assignedCount: assignTasks.length - failedAssign.length,
 				unassignedCount: unassignTasks.length - failedUnassign.length,
 				permissionCount: permissionTasks.length - failedPermissions.length,
+				quotaCount: quotaTasks.length - failedQuota.length,
 				failed: [
 					...failedAssign.map((i) => ({ ...i, action: 'assign' })),
 					...failedUnassign.map((i) => ({ ...i, action: 'unassign' })),
 					...failedPermissions.map((i) => ({ ...i, action: 'permissions' })),
+					...failedQuota.map((i) => ({ ...i, action: 'quota' })),
 				],
 			}
 
@@ -556,6 +692,9 @@ export default {
 			this.pendingUnassign = failedUnassign
 			this.permissionOverrides = Object.fromEntries(
 				failedPermissions.map((i) => [i.id, { write: i.write, share: i.share, delete: i.delete, status: 'error', error: i.error }]),
+			)
+			this.quotaOverrides = Object.fromEntries(
+				failedQuota.map((i) => [i.id, { quota: i.quota, status: 'error', error: i.error }]),
 			)
 			this.applying = false
 
@@ -678,6 +817,11 @@ export default {
 	font-size: 14px;
 }
 
+.gm-fm__add-option-check {
+	flex-shrink: 0;
+	pointer-events: none;
+}
+
 .gm-fm__queue {
 	display: flex;
 	flex-wrap: wrap;
@@ -721,6 +865,9 @@ export default {
 	justify-content: center;
 	width: 18px;
 	height: 18px;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
 	border: none;
 	border-radius: 50%;
 	background: transparent;
@@ -747,46 +894,26 @@ export default {
 }
 
 .gm-fm__table {
-	width: 100%;
-	border-collapse: collapse;
+	display: flex;
+	flex-direction: column;
 }
 
-.gm-fm__table thead th {
-	padding: 0 0 6px;
-	text-align: left;
+.gm-fm__row {
+	display: flex;
+	align-items: center;
+	height: 40px;
+	border-top: 1px solid var(--color-border);
+}
+
+.gm-fm__row--head {
+	height: auto;
+	padding-bottom: 6px;
+	border-top: none;
 	font-size: 11px;
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: .07em;
 	color: var(--color-text-maxcontrast);
-}
-
-.gm-fm__col-name {
-	width: auto;
-}
-
-.gm-fm__col-quota {
-	width: 112px;
-	flex: none;
-}
-
-.gm-fm__col-perm {
-	width: 62px;
-	text-align: center;
-}
-
-.gm-fm__col-spacer {
-	width: 22px;
-}
-
-.gm-fm__row {
-	border-top: 1px solid var(--color-border);
-}
-
-.gm-fm__row td {
-	padding: 9px 0;
-	height: 1px;
-	vertical-align: middle;
 }
 
 .gm-fm__row--changed {
@@ -797,7 +924,27 @@ export default {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	flex: 1;
 	min-width: 0;
+}
+
+.gm-fm__col-quota {
+	position: relative;
+	flex: none;
+	width: 112px;
+	text-align: right;
+}
+
+.gm-fm__col-perm {
+	flex: none;
+	width: 62px;
+	display: flex;
+	justify-content: center;
+}
+
+.gm-fm__col-spacer {
+	flex: none;
+	width: 22px;
 }
 
 .gm-fm__row-icon {
@@ -858,6 +1005,104 @@ export default {
 	white-space: nowrap;
 }
 
+.gm-fm__quota-edit {
+	width: 100%;
+	min-width: 0;
+	min-height: 0;
+	padding: 2px 0;
+	border: none;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+	font-family: inherit;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.gm-fm__quota-edit:hover,
+.gm-fm__quota-edit--changed {
+	color: var(--color-main-text);
+	text-decoration: underline;
+}
+
+.gm-fm__quota-popover {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 4px);
+	right: 0;
+	width: 160px;
+	display: flex;
+	flex-direction: column;
+	padding: 4px;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	box-shadow: 0 2px 12px var(--color-box-shadow);
+	text-align: left;
+}
+
+.gm-fm__quota-option {
+	min-width: 0;
+	min-height: 0;
+	padding: 6px 8px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: transparent;
+	color: var(--color-main-text);
+	font-family: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gm-fm__quota-option:hover {
+	background: var(--color-background-hover);
+}
+
+.gm-fm__quota-option--active {
+	font-weight: 600;
+	color: var(--color-primary-element);
+}
+
+.gm-fm__quota-custom {
+	display: flex;
+	gap: 4px;
+	margin-top: 4px;
+	padding-top: 4px;
+	border-top: 1px solid var(--color-border);
+}
+
+.gm-fm__quota-custom-input {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	/* Nextcloud's own global `input:not(...)` rule sets height via a long
+	   chain of :not() clauses, which gives it far higher specificity than a
+	   single scoped class — NC's own components override it the same way. */
+	height: 26px !important;
+	padding: 4px 6px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+	font-size: 13px;
+}
+
+.gm-fm__quota-custom-apply {
+	flex: none;
+	min-width: 0;
+	min-height: 0;
+	padding: 4px 10px;
+	border: none;
+	border-radius: var(--border-radius);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	font-size: 13px;
+	cursor: pointer;
+}
+
 .gm-fm__row-leaving-label {
 	font-size: 12px;
 	color: var(--color-error-text);
@@ -905,10 +1150,13 @@ export default {
 	justify-content: center;
 	width: 20px;
 	height: 20px;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
 	border: none;
 	border-radius: 50%;
 	background: transparent;
-	color: var(--color-text-maxcontrast);
+	color: var(--color-error-text);
 	font-size: 16px;
 	line-height: 1;
 	cursor: pointer;
@@ -921,8 +1169,7 @@ export default {
 }
 
 .gm-fm__row-remove:hover {
-	background: var(--color-background-dark);
-	color: var(--color-main-text);
+	background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .gm-fm__note {

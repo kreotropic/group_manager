@@ -159,3 +159,12 @@ export async function setGroupFolderPermissions(gid, folderId, { write, share, d
 	})
 	return data
 }
+
+/**
+ * Set a folder's quota in bytes. Quota belongs to the folder, not the group
+ * — this edit affects every other group with access to it too.
+ */
+export async function setGroupFolderQuota(gid, folderId, quota) {
+	const { data } = await axios.put(base('/api/groups/' + encodeURIComponent(gid) + '/folders/' + folderId + '/quota'), { quota })
+	return data
+}

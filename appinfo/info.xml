@@ -7,16 +7,32 @@
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
     <id>group_manager</id>
     <name>Group Manager</name>
-    <summary>Manage local and LDAP groups and their members from one screen</summary>
+    <summary>Manage local and LDAP groups, their members and group folders from one screen</summary>
     <description><![CDATA[
-Group Manager gives administrators a single screen to browse groups (local and LDAP), inspect
-their members, and manage local group membership in bulk — without leaving Settings.
+Group Manager gives administrators a single screen to browse groups (local and LDAP), manage
+local group membership in bulk, and — when Team Folders is installed — assign group folders and
+their per-group permissions and quota, without leaving Settings.
+
+- Browse local and LDAP/AD groups side by side, searchable, with LDAP groups grouped separately.
+- Add people, a whole group at once, or a pasted list to a local group; queue several changes as
+  colored chips and apply them in one batch that never aborts over a single failed row.
+- Assign group folders to a group, edit Write/Share/Delete permissions and the folder's quota, and
+  see a badge when a folder has advanced permissions (ACL) enabled — works for LDAP groups too.
+- LDAP group membership stays read-only, as the directory is the source of truth; everything else
+  works the same as for a local group.
     ]]></description>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <licence>AGPL-3.0-or-later</licence>
     <author mail="rsfneg@gmail.com">Ricardo Ferreira</author>
     <namespace>GroupManager</namespace>
     <category>organization</category>
+    <website>https://github.com/kreotropic/group_manager</website>
+    <bugs>https://github.com/kreotropic/group_manager/issues</bugs>
+    <repository type="git">https://github.com/kreotropic/group_manager.git</repository>
+
+    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/master/screenshots/1-members.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/master/screenshots/2-folders.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/master/screenshots/3-ldap.png</screenshot>
 
     <dependencies>
         <php min-version="8.1"/>

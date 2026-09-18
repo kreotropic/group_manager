@@ -33,5 +33,6 @@ return [
         ['name' => 'group_folder#assign', 'url' => '/api/groups/{gid}/folders/{folderId}', 'verb' => 'POST', 'requirements' => ['gid' => '[^/]+', 'folderId' => '\d+']],
         ['name' => 'group_folder#unassign', 'url' => '/api/groups/{gid}/folders/{folderId}', 'verb' => 'DELETE', 'requirements' => ['gid' => '[^/]+', 'folderId' => '\d+']],
         ['name' => 'group_folder#setPermissions', 'url' => '/api/groups/{gid}/folders/{folderId}/permissions', 'verb' => 'PUT', 'requirements' => ['gid' => '[^/]+', 'folderId' => '\d+']],
+        ['name' => 'group_folder#setQuota', 'url' => '/api/groups/{gid}/folders/{folderId}/quota', 'verb' => 'PUT', 'requirements' => ['gid' => '[^/]+', 'folderId' => '\d+']],
     ],
 ];

@@ -6,9 +6,6 @@
 	<div class="gm-app">
 		<div class="gm-header">
 			<h2>{{ t('group_manager', 'Group Manager') }}</h2>
-			<p class="gm-header__sub">
-				{{ t('group_manager', 'Browse local and LDAP groups and manage local group membership.') }}
-			</p>
 		</div>
 
 		<NcNoteCard v-if="loadError" type="error">
@@ -216,13 +213,9 @@ export default {
 	margin-bottom: 16px;
 }
 
-.gm-header__sub {
-	color: var(--color-text-maxcontrast);
-}
-
 .gm-layout {
 	display: flex;
-	height: calc(100vh - 190px);
+	height: calc(100vh - 170px);
 	min-height: 480px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large);

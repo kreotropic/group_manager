@@ -49,7 +49,7 @@
 						class="gm-detail__tab"
 						:class="{ 'gm-detail__tab--active': activeTab === 'members' }"
 						@click="activeTab = 'members'">
-						{{ t('group_manager', 'Members') }}
+						<span class="gm-detail__tab-label">{{ t('group_manager', 'Members') }}</span>
 						<span class="gm-detail__tab-count">{{ group.memberCount }}</span>
 						<span v-if="showMembersDot" class="gm-detail__tab-dot" />
 					</button>
@@ -57,7 +57,7 @@
 						class="gm-detail__tab"
 						:class="{ 'gm-detail__tab--active': activeTab === 'folders' }"
 						@click="activeTab = 'folders'">
-						{{ t('group_manager', 'Folders') }}
+						<span class="gm-detail__tab-label">{{ t('group_manager', 'Folders') }}</span>
 						<span class="gm-detail__tab-count">{{ group.folderCount }}</span>
 						<span v-if="showFoldersDot" class="gm-detail__tab-dot" />
 					</button>
@@ -69,6 +69,7 @@
 					v-show="!showTabs || activeTab === 'members'"
 					ref="membersManager"
 					:group-id="group.id"
+					:hide-title="showTabs"
 					class="gm-detail__tab-content"
 					@changed="onMembersChanged"
 					@pending-changed="onMembersPendingChanged" />
@@ -421,6 +422,7 @@ export default {
 	margin: 0;
 	font-size: 24px;
 	font-weight: 600;
+	text-align: left;
 }
 
 .gm-detail__name-text {
@@ -470,6 +472,7 @@ export default {
 	padding: 0 0 10px;
 	border: none;
 	border-bottom: 2px solid transparent;
+	border-radius: 0;
 	background: transparent;
 	color: var(--color-text-maxcontrast);
 	font-size: 14px;
@@ -482,6 +485,11 @@ export default {
 	border-bottom-color: var(--color-primary-element);
 	color: var(--color-main-text);
 	font-weight: 600;
+}
+
+.gm-detail__tab-label {
+	padding-bottom: 0;
+	border-bottom: none;
 }
 
 .gm-detail__tab-count {

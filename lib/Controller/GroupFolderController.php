@@ -59,6 +59,11 @@ class GroupFolderController extends Controller {
         return $this->guarded(fn () => new DataResponse($this->folderAssignmentService->setPermissions($gid, $folderId, $write, $share, $delete)));
     }
 
+    public function setQuota(string $gid, int $folderId, int $quota): DataResponse {
+        $gid = urldecode($gid);
+        return $this->guarded(fn () => new DataResponse($this->folderAssignmentService->setQuota($gid, $folderId, $quota)));
+    }
+
     private function guarded(callable $action): DataResponse {
         try {
             return $action();

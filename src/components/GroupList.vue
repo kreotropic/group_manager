@@ -241,6 +241,7 @@ export default {
 	padding: 0 0 4px;
 	border: none;
 	border-bottom: 2px solid transparent;
+	border-radius: 0;
 	background: transparent;
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
@@ -276,6 +277,7 @@ export default {
 	width: 100%;
 	padding: 8px 20px;
 	border: none;
+	border-radius: 0;
 	background: transparent;
 	color: var(--color-main-text);
 	text-align: left;

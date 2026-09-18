@@ -137,6 +137,23 @@ class FolderAssignmentService {
         return $this->describeFolder($this->requireFolder($folderId), $gid);
     }
 
+    /**
+     * Quota belongs to the folder, not this group — every other group with
+     * access shares it — but the edit is still only reachable from a group
+     * that can see the folder (i.e. has access to it), same gate as permissions.
+     *
+     * @return array<string, mixed>
+     */
+    public function setQuota(string $gid, int $folderId, int $quota): array {
+        $this->requireEnabled();
+        $folder = $this->requireFolder($folderId);
+        if (!$this->groupHasAccess($folder, $gid)) {
+            throw new GroupServiceException('Group does not have access to this folder', 'FOLDER_NOT_ASSIGNED', 404);
+        }
+        $this->manager()->setFolderQuota($folderId, $quota);
+        return $this->describeFolder($this->requireFolder($folderId), $gid);
+    }
+
     private function requireEnabled(): void {
         if (!$this->isEnabled()) {
             throw new GroupServiceException('Group folders app is not enabled', 'GROUPFOLDERS_DISABLED', 404);
