@@ -83,9 +83,7 @@
 						class="gm-fm__chip-close"
 						:aria-label="t('group_manager', 'Cancel: {name}', { name: chip.mountPoint })"
 						:disabled="applying"
-						@click="cancelChip(chip)">
-						×
-					</button>
+						@click="cancelChip(chip)"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
 				</span>
 			</div>
 
@@ -210,9 +208,7 @@
 							class="gm-fm__row-remove"
 							:aria-label="t('group_manager', 'Remove access to {name}', { name: row.mountPoint })"
 							:disabled="applying"
-							@click="removeRow(row)">
-							×
-						</button>
+							@click="removeRow(row)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
 					</span>
 				</div>
 			</div>
@@ -953,10 +949,12 @@ export default {
 	border-radius: 50%;
 	background: transparent;
 	color: inherit;
-	font-size: 15px;
-	line-height: 1;
 	cursor: pointer;
 	opacity: .75;
+}
+
+.gm-fm__chip-close svg {
+	display: block;
 }
 
 .gm-fm__chip-close:hover {
@@ -1238,10 +1236,12 @@ export default {
 	border-radius: 50%;
 	background: transparent;
 	color: var(--color-error-text);
-	font-size: 16px;
-	line-height: 1;
 	cursor: pointer;
 	opacity: 0;
+}
+
+.gm-fm__row-remove svg {
+	display: block;
 }
 
 .gm-fm__row:hover .gm-fm__row-remove,
