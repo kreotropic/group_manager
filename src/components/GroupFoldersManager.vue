@@ -12,6 +12,7 @@
 						v-model="addQuery"
 						type="text"
 						class="gm-fm__add-input"
+						:disabled="applying"
 						:placeholder="t('group_manager', 'Assign a group folder…')"
 						:aria-label="t('group_manager', 'Assign a group folder')"
 						@input="onAddInput"
@@ -61,7 +62,7 @@
 					</ul>
 				</div>
 
-				<NcButton class="gm-fm__create-folder" @click="showCreateFolderDialog = true">
+				<NcButton class="gm-fm__create-folder" :disabled="applying" @click="showCreateFolderDialog = true">
 					<template #icon>
 						<Plus :size="18" />
 					</template>
@@ -125,6 +126,7 @@
 							type="button"
 							class="gm-fm__quota-edit"
 							:class="{ 'gm-fm__quota-edit--changed': quotaOverrides[row.id] }"
+							:disabled="applying"
 							:aria-label="t('group_manager', 'Edit quota for {name}', { name: row.mountPoint })"
 							@click="toggleQuotaEditor(row)">
 							{{ formatQuota(row) }}
@@ -246,6 +248,8 @@
 <script>
 import { translate as t } from '@nextcloud/l10n'
 import { showSuccess } from '@nextcloud/dialogs'
+import { confirmPassword } from '@nextcloud/password-confirmation'
+import '@nextcloud/password-confirmation/style.css'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
@@ -558,6 +562,10 @@ export default {
 		 * from the same search be queued without re-opening and re-typing.
 		 */
 		pickFolder(folder) {
+			// Defense in depth: the add field is disabled while applying.
+			if (this.applying) {
+				return
+			}
 			if (this.isQueuedFolder(folder.id)) {
 				this.pendingAssign = this.pendingAssign.filter((i) => i.id !== folder.id)
 				return
@@ -610,6 +618,10 @@ export default {
 		},
 
 		toggleQuotaEditor(row) {
+			// Defense in depth: the quota-edit button is disabled while applying.
+			if (this.applying) {
+				return
+			}
 			this.editingQuotaId = this.editingQuotaId === row.id ? null : row.id
 			this.customQuotaGb = null
 		},
@@ -649,6 +661,7 @@ export default {
 
 		async applyChanges() {
 			this.applying = true
+			this.closeDropdown()
 			this.lastResult = null
 
 			const assignTasks = this.pendingAssign.map((item) => ({ kind: 'assign', item }))
@@ -676,6 +689,17 @@ export default {
 				},
 			}))
 			const tasks = [...assignTasks, ...unassignTasks, ...permissionTasks, ...quotaTasks]
+
+			try {
+				await confirmPassword()
+			} catch {
+				tasks.forEach(({ item }) => {
+					item.status = 'pending'
+					item.error = ''
+				})
+				this.applying = false
+				return
+			}
 
 			await runWithConcurrency(tasks, APPLY_CONCURRENCY, async ({ kind, item }) => {
 				try {
@@ -713,13 +737,33 @@ export default {
 				],
 			}
 
-			this.pendingAssign = failedAssign
-			this.pendingUnassign = failedUnassign
+			// Drop only this batch's own succeeded/failed entries from the live
+			// queue/overrides — anything queued after the snapshot was taken
+			// (the add field is disabled while applying, but this stays
+			// correct even so) is left untouched instead of being wiped out
+			// by a wholesale reassignment.
+			const doneAssignIds = new Set(assignTasks.map((task) => task.item).filter((i) => i.status !== 'error').map((i) => i.id))
+			const doneUnassignIds = new Set(unassignTasks.map((task) => task.item).filter((i) => i.status !== 'error').map((i) => i.id))
+			const donePermissionIds = new Set(permissionTasks.map((task) => task.item).filter((i) => i.status !== 'error').map((i) => i.id))
+			const doneQuotaIds = new Set(quotaTasks.map((task) => task.item).filter((i) => i.status !== 'error').map((i) => i.id))
+
+			this.pendingAssign = this.pendingAssign.filter((i) => !doneAssignIds.has(i.id))
+			this.pendingUnassign = this.pendingUnassign.filter((i) => !doneUnassignIds.has(i.id))
 			this.permissionOverrides = Object.fromEntries(
-				failedPermissions.map((i) => [i.id, { write: i.write, share: i.share, delete: i.delete, status: 'error', error: i.error }]),
+				Object.entries(this.permissionOverrides)
+					.filter(([id]) => !donePermissionIds.has(Number(id)))
+					.map(([id, override]) => {
+						const failed = failedPermissions.find((i) => i.id === Number(id))
+						return failed ? [id, { ...override, status: 'error', error: failed.error }] : [id, override]
+					}),
 			)
 			this.quotaOverrides = Object.fromEntries(
-				failedQuota.map((i) => [i.id, { quota: i.quota, status: 'error', error: i.error }]),
+				Object.entries(this.quotaOverrides)
+					.filter(([id]) => !doneQuotaIds.has(Number(id)))
+					.map(([id, override]) => {
+						const failed = failedQuota.find((i) => i.id === Number(id))
+						return failed ? [id, { ...override, status: 'error', error: failed.error }] : [id, override]
+					}),
 			)
 			this.applying = false
 

@@ -16,6 +16,7 @@
         "Cancel": "Cancelar",
         "Cancel: {name}": "Cancelar: {name}",
         "Cannot be changed later.": "No se puede cambiar más tarde.",
+        "Cannot remove the last member of the admin group": "No se puede eliminar al último miembro del grupo admin",
         "Choose a group on the left to see its details and members.": "Elija un grupo a la izquierda para ver sus detalles y miembros.",
         "Clear filters": "Borrar filtros",
         "Could not create the group folder.": "No se pudo crear la carpeta de grupo.",
@@ -58,6 +59,7 @@
         "Group does not have access to this folder": "El grupo no tiene acceso a esta carpeta",
         "Group folder \"{name}\" created.": "Carpeta de grupo \"{name}\" creada.",
         "Group folder not found": "Carpeta de grupo no encontrada",
+        "Group folder was created but could not be assigned to the group": "La carpeta de grupo se creó pero no se pudo asignar al grupo",
         "Group folders app is not enabled": "La aplicación de carpetas de grupo no está activada",
         "Group is managed by an external backend and cannot be deleted here": "Este grupo está gestionado por un backend externo y no se puede eliminar aquí",
         "Group is managed by an external backend and cannot be modified here": "Este grupo está gestionado por un backend externo y no se puede modificar aquí",
@@ -116,6 +118,7 @@
         "User not found": "Usuario no encontrado",
         "Write": "Escribir",
         "Write access to {name}": "Acceso de escritura a {name}",
+        "You cannot remove yourself from the admin group": "No puede eliminarse a sí mismo del grupo admin",
         "You have unapplied member changes for this group. Discard them and switch groups?": "Tiene cambios de miembros sin aplicar en este grupo. ¿Descartarlos y cambiar de grupo?",
         "_%n change in Folders_::_%n changes in Folders_": [
             "%n cambio en Carpetas",

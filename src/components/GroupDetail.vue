@@ -122,6 +122,8 @@
 
 <script>
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import { confirmPassword } from '@nextcloud/password-confirmation'
+import '@nextcloud/password-confirmation/style.css'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -363,6 +365,7 @@ export default {
 		 */
 		async confirmDelete() {
 			try {
+				await confirmPassword()
 				await deleteGroup(this.group.id)
 				this.$emit('deleted', this.group.id)
 				return true

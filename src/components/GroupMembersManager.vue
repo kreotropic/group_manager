@@ -18,6 +18,7 @@
 						v-model="addQuery"
 						type="text"
 						class="gm-mm__add-input"
+						:disabled="applying"
 						:placeholder="t('group_manager', 'Add a person, a whole group, or paste a list…')"
 						:aria-label="t('group_manager', 'Add a person, a whole group, or paste a list')"
 						@input="onAddInput"
@@ -201,6 +202,8 @@
 
 <script>
 import { translate as t } from '@nextcloud/l10n'
+import { confirmPassword } from '@nextcloud/password-confirmation'
+import '@nextcloud/password-confirmation/style.css'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -639,6 +642,12 @@ export default {
 		},
 
 		addUserToQueue(user) {
+			// Defense in depth: the add field is disabled while applying, but
+			// this guards direct callers too (e.g. a paste-review confirmed
+			// or a group expansion resolving just as Apply was pressed).
+			if (this.applying) {
+				return
+			}
 			if (this.pendingAdd.some((i) => i.uid === user.uid) || this.members.some((m) => m.uid === user.uid)) {
 				return
 			}
@@ -681,16 +690,37 @@ export default {
 
 		async applyChanges() {
 			this.applying = true
+			this.closeDropdown()
 			this.lastResult = null
 
+			// Snapshot the queue before anything async happens. The add field
+			// is disabled while applying, but a paste-review confirmation or
+			// group expansion already in flight can still land afterwards —
+			// operating on this snapshot (instead of re-reading this.pendingAdd
+			// / this.pendingRemove once the batch settles) means anything
+			// queued mid-batch survives instead of being silently discarded.
+			const addSnapshot = [...this.pendingAdd]
+			const removeSnapshot = [...this.pendingRemove]
+
 			const tasks = [
-				...this.pendingAdd.map((item) => ({ kind: 'add', item })),
-				...this.pendingRemove.map((item) => ({ kind: 'remove', item })),
+				...addSnapshot.map((item) => ({ kind: 'add', item })),
+				...removeSnapshot.map((item) => ({ kind: 'remove', item })),
 			]
 			tasks.forEach(({ item }) => {
 				item.status = 'applying'
 				item.error = ''
 			})
+
+			try {
+				await confirmPassword()
+			} catch {
+				tasks.forEach(({ item }) => {
+					item.status = 'pending'
+					item.error = ''
+				})
+				this.applying = false
+				return
+			}
 
 			await runWithConcurrency(tasks, APPLY_CONCURRENCY, async ({ kind, item }) => {
 				try {
@@ -706,20 +736,24 @@ export default {
 				}
 			})
 
-			const failedAdd = this.pendingAdd.filter((i) => i.status === 'error')
-			const failedRemove = this.pendingRemove.filter((i) => i.status === 'error')
+			const failedAdd = addSnapshot.filter((i) => i.status === 'error')
+			const failedRemove = removeSnapshot.filter((i) => i.status === 'error')
 
 			this.lastResult = {
-				addedCount: this.pendingAdd.length - failedAdd.length,
-				removedCount: this.pendingRemove.length - failedRemove.length,
+				addedCount: addSnapshot.length - failedAdd.length,
+				removedCount: removeSnapshot.length - failedRemove.length,
 				failed: [
 					...failedAdd.map((i) => ({ ...i, action: 'add' })),
 					...failedRemove.map((i) => ({ ...i, action: 'remove' })),
 				],
 			}
 
-			this.pendingAdd = failedAdd
-			this.pendingRemove = failedRemove
+			// Drop only the snapshot's own succeeded/failed items from the live
+			// queue — anything queued after the snapshot was taken is left as-is.
+			const doneAddUids = new Set(addSnapshot.filter((i) => i.status !== 'error').map((i) => i.uid))
+			const doneRemoveUids = new Set(removeSnapshot.filter((i) => i.status !== 'error').map((i) => i.uid))
+			this.pendingAdd = this.pendingAdd.filter((i) => !doneAddUids.has(i.uid))
+			this.pendingRemove = this.pendingRemove.filter((i) => !doneRemoveUids.has(i.uid))
 			this.applying = false
 
 			await this.reload()

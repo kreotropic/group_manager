@@ -33,12 +33,10 @@ class GroupFolderController extends Controller {
     }
 
     public function index(string $gid): DataResponse {
-        $gid = urldecode($gid);
         return $this->guarded(fn () => new DataResponse(['folders' => $this->folderAssignmentService->listAssigned($gid)]));
     }
 
     public function search(string $gid, string $search = '', int $limit = 10): DataResponse {
-        $gid = urldecode($gid);
         return $this->guarded(fn () => new DataResponse(['folders' => $this->folderAssignmentService->searchAssignable($gid, $search, $limit)]));
     }
 
@@ -51,30 +49,33 @@ class GroupFolderController extends Controller {
      */
     #[PasswordConfirmationRequired]
     public function create(string $gid, string $mountPoint): DataResponse {
-        $gid = urldecode($gid);
         return $this->guarded(fn () => new DataResponse($this->folderAssignmentService->createFolder($gid, $mountPoint)));
     }
 
+    /**
+     * Grants a group access to a folder — a security-boundary change, same
+     * bar as removing it (unassign) or editing its permissions/quota.
+     */
+    #[PasswordConfirmationRequired]
     public function assign(string $gid, int $folderId): DataResponse {
-        $gid = urldecode($gid);
         return $this->guarded(fn () => new DataResponse($this->folderAssignmentService->assignFolder($gid, $folderId)));
     }
 
+    #[PasswordConfirmationRequired]
     public function unassign(string $gid, int $folderId): DataResponse {
-        $gid = urldecode($gid);
         return $this->guarded(function () use ($gid, $folderId) {
             $this->folderAssignmentService->unassignFolder($gid, $folderId);
             return new DataResponse([]);
         });
     }
 
+    #[PasswordConfirmationRequired]
     public function setPermissions(string $gid, int $folderId, bool $write, bool $share, bool $delete): DataResponse {
-        $gid = urldecode($gid);
         return $this->guarded(fn () => new DataResponse($this->folderAssignmentService->setPermissions($gid, $folderId, $write, $share, $delete)));
     }
 
+    #[PasswordConfirmationRequired]
     public function setQuota(string $gid, int $folderId, int $quota): DataResponse {
-        $gid = urldecode($gid);
         return $this->guarded(fn () => new DataResponse($this->folderAssignmentService->setQuota($gid, $folderId, $quota)));
     }
 

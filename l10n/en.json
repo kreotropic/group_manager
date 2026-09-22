@@ -16,6 +16,7 @@
         "Cancel": "Cancel",
         "Cancel: {name}": "Cancel: {name}",
         "Cannot be changed later.": "Cannot be changed later.",
+        "Cannot remove the last member of the admin group": "Cannot remove the last member of the admin group",
         "Choose a group on the left to see its details and members.": "Choose a group on the left to see its details and members.",
         "Clear filters": "Clear filters",
         "Could not create the group folder.": "Could not create the group folder.",
@@ -58,6 +59,7 @@
         "Group does not have access to this folder": "Group does not have access to this folder",
         "Group folder \"{name}\" created.": "Group folder \"{name}\" created.",
         "Group folder not found": "Group folder not found",
+        "Group folder was created but could not be assigned to the group": "Group folder was created but could not be assigned to the group",
         "Group folders app is not enabled": "Group folders app is not enabled",
         "Group is managed by an external backend and cannot be deleted here": "Group is managed by an external backend and cannot be deleted here",
         "Group is managed by an external backend and cannot be modified here": "Group is managed by an external backend and cannot be modified here",
@@ -116,6 +118,7 @@
         "User not found": "User not found",
         "Write": "Write",
         "Write access to {name}": "Write access to {name}",
+        "You cannot remove yourself from the admin group": "You cannot remove yourself from the admin group",
         "You have unapplied member changes for this group. Discard them and switch groups?": "You have unapplied member changes for this group. Discard them and switch groups?",
         "_%n change in Folders_::_%n changes in Folders_": [
             "%n change in Folders",

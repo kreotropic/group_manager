@@ -16,6 +16,7 @@
         "Cancel": "Abbrechen",
         "Cancel: {name}": "Abbrechen: {name}",
         "Cannot be changed later.": "Kann später nicht mehr geändert werden.",
+        "Cannot remove the last member of the admin group": "Das letzte Mitglied der Admin-Gruppe kann nicht entfernt werden",
         "Choose a group on the left to see its details and members.": "Wählen Sie links eine Gruppe aus, um Details und Mitglieder zu sehen.",
         "Clear filters": "Filter zurücksetzen",
         "Could not create the group folder.": "Der Gruppenordner konnte nicht erstellt werden.",
@@ -58,6 +59,7 @@
         "Group does not have access to this folder": "Die Gruppe hat keinen Zugriff auf diesen Ordner",
         "Group folder \"{name}\" created.": "Gruppenordner \"{name}\" erstellt.",
         "Group folder not found": "Gruppenordner nicht gefunden",
+        "Group folder was created but could not be assigned to the group": "Der Gruppenordner wurde erstellt, konnte der Gruppe aber nicht zugewiesen werden",
         "Group folders app is not enabled": "Die Gruppenordner-App ist nicht aktiviert",
         "Group is managed by an external backend and cannot be deleted here": "Diese Gruppe wird von einem externen Backend verwaltet und kann hier nicht gelöscht werden",
         "Group is managed by an external backend and cannot be modified here": "Diese Gruppe wird von einem externen Backend verwaltet und kann hier nicht geändert werden",
@@ -116,6 +118,7 @@
         "User not found": "Benutzer nicht gefunden",
         "Write": "Schreiben",
         "Write access to {name}": "Schreibzugriff auf {name}",
+        "You cannot remove yourself from the admin group": "Sie können sich nicht selbst aus der Admin-Gruppe entfernen",
         "You have unapplied member changes for this group. Discard them and switch groups?": "Sie haben nicht angewendete Mitgliederänderungen für diese Gruppe. Verwerfen und Gruppe wechseln?",
         "_%n change in Folders_::_%n changes in Folders_": [
             "%n Änderung in Ordner",

@@ -14,6 +14,7 @@ use OCP\IGroup;
 use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IUserManager;
+use OCP\IUserSession;
 use OCP\LDAP\ILDAPProviderFactory;
 
 /**
@@ -29,6 +30,7 @@ class GroupService {
         private ISubAdmin $subAdmin,
         private ILDAPProviderFactory $ldapProviderFactory,
         private FolderAssignmentService $folderAssignmentService,
+        private IUserSession $userSession,
         private IL10N $l,
     ) {
     }
@@ -218,8 +220,36 @@ class GroupService {
             throw new GroupServiceException($this->l->t('Removing members is not supported by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
 
+        if ($gid === 'admin' && $group->inGroup($user)) {
+            $this->guardAdminGroupRemoval($group, $user);
+        }
+
         if ($group->inGroup($user)) {
             $group->removeUser($user);
+        }
+    }
+
+    /**
+     * The instance's admin group can never go interface-reachable-empty
+     * through this app: an admin can't remove themselves from it (the
+     * caller is always a current admin — this whole controller requires
+     * it — so refusing self-removal alone guarantees at least one admin
+     * always survives any single call here), and a defense-in-depth count
+     * check refuses to remove the group's last member outright. The count
+     * check is best-effort, not race-proof: two admins removing different
+     * members of "admin" at the same moment can both pass it before either
+     * IGroup::removeUser() call lands, since the public API exposes no
+     * transaction/lock to close that window.
+     */
+    private function guardAdminGroupRemoval(IGroup $group, \OCP\IUser $user): void {
+        $currentUser = $this->userSession->getUser();
+        if ($currentUser !== null && $currentUser->getUID() === $user->getUID()) {
+            throw new GroupServiceException($this->l->t('You cannot remove yourself from the admin group'), 'CANNOT_REMOVE_SELF_FROM_ADMIN', 403);
+        }
+
+        $count = $group->count();
+        if ($count !== false && $count <= 1) {
+            throw new GroupServiceException($this->l->t('Cannot remove the last member of the admin group'), 'LAST_ADMIN_PROTECTED', 403);
         }
     }
 

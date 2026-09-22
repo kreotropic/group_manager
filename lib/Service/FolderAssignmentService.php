@@ -146,7 +146,19 @@ class FolderAssignmentService {
             throw new GroupServiceException($this->l->t('A group folder with this name already exists'), 'FOLDER_ALREADY_EXISTS', 409);
         }
         $folderId = $this->manager()->createFolder($mountPoint);
-        $this->manager()->addApplicableGroup($folderId, $gid);
+        try {
+            $this->manager()->addApplicableGroup($folderId, $gid);
+        } catch (\Throwable) {
+            // Compensate: don't leave a newly created folder that's assigned
+            // to nobody sitting around as an orphan just because the second
+            // step failed. Best-effort — if the cleanup itself fails too,
+            // the original error is still what the admin needs to see.
+            try {
+                $this->manager()->removeFolder($folderId);
+            } catch (\Throwable) {
+            }
+            throw new GroupServiceException($this->l->t('Group folder was created but could not be assigned to the group'), 'FOLDER_ASSIGN_FAILED', 500);
+        }
         return $this->describeFolder($this->requireFolder($folderId), $gid);
     }
 

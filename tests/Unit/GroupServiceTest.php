@@ -15,7 +15,9 @@ use OCP\Group\ISubAdmin;
 use OCP\IGroup;
 use OCP\IGroupManager;
 use OCP\IL10N;
+use OCP\IUser;
 use OCP\IUserManager;
+use OCP\IUserSession;
 use OCP\LDAP\ILDAPProviderFactory;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -27,6 +29,7 @@ class GroupServiceTest extends TestCase {
     private ISubAdmin&MockObject $subAdmin;
     private ILDAPProviderFactory&MockObject $ldapProviderFactory;
     private FolderAssignmentService&MockObject $folderAssignmentService;
+    private IUserSession&MockObject $userSession;
     private IL10N&MockObject $l;
     private GroupService $service;
 
@@ -36,12 +39,16 @@ class GroupServiceTest extends TestCase {
         $this->subAdmin = $this->createMock(ISubAdmin::class);
         $this->ldapProviderFactory = $this->createMock(ILDAPProviderFactory::class);
         $this->folderAssignmentService = $this->createMock(FolderAssignmentService::class);
+        $this->userSession = $this->createMock(IUserSession::class);
         $this->l = $this->createMock(IL10N::class);
 
         $this->ldapProviderFactory->method('isAvailable')->willReturn(false);
         $this->folderAssignmentService->method('isEnabled')->willReturn(false);
         $this->folderAssignmentService->method('folderCount')->willReturn(0);
         $this->subAdmin->method('getGroupsSubAdmins')->willReturn([]);
+        // IUserSession::getUser() is nullable, so an unconfigured mock
+        // already returns null (no signed-in user) — tests that care about
+        // self-removal configure it explicitly, once, on their own.
         // Messages are asserted by errorCode, never by translated text, so
         // the mock just echoes the untranslated string back.
         $this->l->method('t')->willReturnArgument(0);
@@ -52,19 +59,26 @@ class GroupServiceTest extends TestCase {
             $this->subAdmin,
             $this->ldapProviderFactory,
             $this->folderAssignmentService,
+            $this->userSession,
             $this->l,
         );
+    }
+
+    private function user(string $uid): IUser&MockObject {
+        $user = $this->createMock(IUser::class);
+        $user->method('getUID')->willReturn($uid);
+        return $user;
     }
 
     /**
      * @param list<string> $backendNames
      */
-    private function group(string $gid, array $backendNames, ?string $displayName = null): IGroup&MockObject {
+    private function group(string $gid, array $backendNames, ?string $displayName = null, int $memberCount = 0): IGroup&MockObject {
         $group = $this->createMock(IGroup::class);
         $group->method('getGID')->willReturn($gid);
         $group->method('getDisplayName')->willReturn($displayName ?? $gid);
         $group->method('getBackendNames')->willReturn($backendNames);
-        $group->method('count')->willReturn(0);
+        $group->method('count')->willReturn($memberCount);
         $group->method('countDisabled')->willReturn(0);
         $group->method('canAddUser')->willReturn(true);
         $group->method('canRemoveUser')->willReturn(true);
@@ -222,6 +236,55 @@ class GroupServiceTest extends TestCase {
             'TOO_MANY_TOKENS',
             400,
         );
+    }
+
+    public function testRemoveMemberBlocksSelfRemovalFromAdminGroup(): void {
+        $admin = $this->group('admin', ['Database'], memberCount: 3);
+        $admin->method('inGroup')->willReturn(true);
+        $admin->expects($this->never())->method('removeUser');
+        $this->groupManager->method('get')->with('admin')->willReturn($admin);
+
+        $alice = $this->user('alice');
+        $this->userManager->method('get')->with('alice')->willReturn($alice);
+        $this->userSession->method('getUser')->willReturn($this->user('alice'));
+
+        $this->assertServiceException(
+            fn () => $this->service->removeMember('admin', 'alice'),
+            'CANNOT_REMOVE_SELF_FROM_ADMIN',
+            403,
+        );
+    }
+
+    public function testRemoveMemberBlocksRemovingLastAdmin(): void {
+        $admin = $this->group('admin', ['Database'], memberCount: 1);
+        $admin->method('inGroup')->willReturn(true);
+        $admin->expects($this->never())->method('removeUser');
+        $this->groupManager->method('get')->with('admin')->willReturn($admin);
+
+        $bob = $this->user('bob');
+        $this->userManager->method('get')->with('bob')->willReturn($bob);
+        // Signed-in user is someone else, so this isn't a self-removal — but
+        // bob is the group's only member, so it must still be refused.
+        $this->userSession->method('getUser')->willReturn($this->user('alice'));
+
+        $this->assertServiceException(
+            fn () => $this->service->removeMember('admin', 'bob'),
+            'LAST_ADMIN_PROTECTED',
+            403,
+        );
+    }
+
+    public function testRemoveMemberAllowsRemovingAnotherAdminWhenMoreThanOneRemain(): void {
+        $admin = $this->group('admin', ['Database'], memberCount: 2);
+        $admin->method('inGroup')->willReturn(true);
+        $admin->expects($this->once())->method('removeUser');
+        $this->groupManager->method('get')->with('admin')->willReturn($admin);
+
+        $bob = $this->user('bob');
+        $this->userManager->method('get')->with('bob')->willReturn($bob);
+        $this->userSession->method('getUser')->willReturn($this->user('alice'));
+
+        $this->service->removeMember('admin', 'bob');
     }
 
     public function testResolvePastedTokensAllowsUpToLimit(): void {

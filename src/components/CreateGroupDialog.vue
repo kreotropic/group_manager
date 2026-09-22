@@ -32,6 +32,8 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { translate as t } from '@nextcloud/l10n'
+import { confirmPassword } from '@nextcloud/password-confirmation'
+import '@nextcloud/password-confirmation/style.css'
 import { createGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
@@ -105,6 +107,7 @@ export default {
 			}
 
 			try {
+				await confirmPassword()
 				const group = await createGroup(gid, this.displayName.trim())
 				this.$emit('created', group)
 				this.reset()

@@ -16,6 +16,7 @@
         "Cancel": "Annuler",
         "Cancel: {name}": "Annuler : {name}",
         "Cannot be changed later.": "Ne peut pas être modifié ultérieurement.",
+        "Cannot remove the last member of the admin group": "Impossible de supprimer le dernier membre du groupe admin",
         "Choose a group on the left to see its details and members.": "Choisissez un groupe à gauche pour voir ses détails et ses membres.",
         "Clear filters": "Effacer les filtres",
         "Could not create the group folder.": "Impossible de créer le dossier de groupe.",
@@ -58,6 +59,7 @@
         "Group does not have access to this folder": "Le groupe n'a pas accès à ce dossier",
         "Group folder \"{name}\" created.": "Dossier de groupe \"{name}\" créé.",
         "Group folder not found": "Dossier de groupe introuvable",
+        "Group folder was created but could not be assigned to the group": "Le dossier de groupe a été créé mais n'a pas pu être attribué au groupe",
         "Group folders app is not enabled": "L'application de dossiers de groupe n'est pas activée",
         "Group is managed by an external backend and cannot be deleted here": "Ce groupe est géré par un backend externe et ne peut pas être supprimé ici",
         "Group is managed by an external backend and cannot be modified here": "Ce groupe est géré par un backend externe et ne peut pas être modifié ici",
@@ -116,6 +118,7 @@
         "User not found": "Utilisateur introuvable",
         "Write": "Écrire",
         "Write access to {name}": "Accès en écriture à {name}",
+        "You cannot remove yourself from the admin group": "Vous ne pouvez pas vous retirer vous-même du groupe admin",
         "You have unapplied member changes for this group. Discard them and switch groups?": "Vous avez des modifications de membres non appliquées pour ce groupe. Les ignorer et changer de groupe ?",
         "_%n change in Folders_::_%n changes in Folders_": [
             "%n modification dans Dossiers",
