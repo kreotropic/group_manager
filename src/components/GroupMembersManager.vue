@@ -137,19 +137,27 @@
 				{{ t('group_manager', 'This group has no members yet.') }}
 			</p>
 
-			<ul v-else class="gm-mm__grid">
-				<li v-for="member in members"
+			<div v-else class="gm-mm__table" role="table">
+				<div class="gm-mm__row gm-mm__row--head" role="row">
+					<span class="gm-mm__col-member" role="columnheader">{{ t('group_manager', 'Member') }}</span>
+					<span class="gm-mm__col-account" role="columnheader">{{ t('group_manager', 'Account') }}</span>
+					<span class="gm-mm__col-spacer" role="columnheader" />
+				</div>
+				<div v-for="member in members"
 					:key="member.uid"
 					class="gm-mm__row"
+					role="row"
 					:class="{ 'gm-mm__row--leaving': isPendingRemove(member.uid) }">
-					<NcAvatar :user="member.uid"
-						:display-name="member.displayName"
-						:size="26"
-						:disable-menu="true"
-						:disable-tooltip="true"
-						class="gm-mm__row-avatar" />
-					<span class="gm-mm__row-name">{{ member.displayName }}</span>
-					<span class="gm-mm__row-meta">
+					<span class="gm-mm__col-member" role="cell">
+						<NcAvatar :user="member.uid"
+							:display-name="member.displayName"
+							:size="26"
+							:disable-menu="true"
+							:disable-tooltip="true"
+							class="gm-mm__row-avatar" />
+						<span class="gm-mm__row-name">{{ member.displayName }}</span>
+					</span>
+					<span class="gm-mm__col-account" role="cell">
 						<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
 							{{ t('group_manager', 'leaving') }}
 						</span>
@@ -159,14 +167,16 @@
 						<span v-else-if="member.email" class="gm-mm__row-email">{{ member.email }}</span>
 						<span v-else class="gm-mm__row-email">{{ member.uid }}</span>
 					</span>
-					<button v-if="!isPendingRemove(member.uid)"
-						type="button"
-						class="gm-mm__row-remove"
-						:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
-						:disabled="applying"
-						@click="markForRemoval(member)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
-				</li>
-			</ul>
+					<span class="gm-mm__col-spacer" role="cell">
+						<button v-if="!isPendingRemove(member.uid)"
+							type="button"
+							class="gm-mm__row-remove"
+							:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
+							:disabled="applying"
+							@click="markForRemoval(member)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
+					</span>
+				</div>
+			</div>
 
 			<NcButton v-if="hasMore"
 				class="gm-mm__more"
@@ -1053,27 +1063,61 @@ export default {
 	color: var(--color-text-maxcontrast);
 }
 
-.gm-mm__grid {
+.gm-mm__table {
 	display: flex;
 	flex-direction: column;
-	max-width: 560px;
-	list-style: none;
-	margin: 0;
-	padding: 0;
 }
 
 .gm-mm__row {
-	position: relative;
+	display: flex;
+	align-items: center;
+	height: 44px;
+	border-top: 1px solid var(--color-border);
+}
+
+.gm-mm__row--head {
+	height: auto;
+	padding-bottom: 6px;
+	border-top: none;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: .07em;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Zebra striping — the header (first child) is excluded, so the first data
+   row lands on :nth-child(even); which parity that is doesn't matter, only
+   that alternate rows differ. */
+.gm-mm__row:not(.gm-mm__row--head):nth-child(even) {
+	background: var(--color-background-hover);
+}
+
+.gm-mm__row:not(.gm-mm__row--head):hover {
+	background: var(--color-background-dark);
+}
+
+.gm-mm__col-member {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 6px 26px 6px 2px;
-	border-radius: var(--border-radius);
+	flex: 1 1 55%;
 	min-width: 0;
 }
 
-.gm-mm__row:hover {
-	background: var(--color-background-hover);
+.gm-mm__col-account {
+	flex: 1 1 35%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 13px;
+}
+
+.gm-mm__col-spacer {
+	flex: 0 0 22px;
+	display: flex;
+	justify-content: flex-end;
 }
 
 .gm-mm__row-avatar {
@@ -1081,8 +1125,6 @@ export default {
 }
 
 .gm-mm__row-name {
-	flex-shrink: 0;
-	max-width: 45%;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -1092,16 +1134,6 @@ export default {
 .gm-mm__row--leaving .gm-mm__row-name {
 	text-decoration: line-through;
 	color: var(--color-text-maxcontrast);
-}
-
-.gm-mm__row-meta {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	text-align: right;
-	font-size: 12px;
 }
 
 .gm-mm__row-email {
@@ -1117,12 +1149,10 @@ export default {
 	color: var(--color-error-text);
 }
 
-/* Reserved space so the × appearing on hover never shifts the layout. */
+/* Visible (not hover-gated) so the action is discoverable without a mouse —
+   dim by default, switching to the destructive color on hover/focus so
+   intent stays clear right before the click. */
 .gm-mm__row-remove {
-	position: absolute;
-	right: 4px;
-	top: 50%;
-	transform: translateY(-50%);
 	width: 22px;
 	height: 22px;
 	min-width: 0;
@@ -1134,22 +1164,23 @@ export default {
 	border: none;
 	border-radius: 50%;
 	background: transparent;
-	color: var(--color-error-text);
+	color: var(--color-text-maxcontrast);
 	cursor: pointer;
-	opacity: 0;
 }
 
 .gm-mm__row-remove svg {
 	display: block;
 }
 
-.gm-mm__row:hover .gm-mm__row-remove,
+.gm-mm__row-remove:hover,
 .gm-mm__row-remove:focus-visible {
-	opacity: 1;
+	color: var(--color-error-text);
+	background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
-.gm-mm__row-remove:hover {
-	background: color-mix(in srgb, currentColor 18%, transparent);
+.gm-mm__row-remove:disabled {
+	opacity: .35;
+	cursor: default;
 }
 
 .gm-mm__more {
