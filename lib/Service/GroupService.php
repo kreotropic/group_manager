@@ -16,6 +16,8 @@ use OCP\IL10N;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\LDAP\ILDAPProviderFactory;
+use OCP\Lock\ILockingProvider;
+use OCP\Lock\LockedException;
 
 /**
  * Wraps IGroupManager/IGroup with the app's own rules for what counts as a
@@ -23,6 +25,33 @@ use OCP\LDAP\ILDAPProviderFactory;
  * GroupServiceException with a stable error code the frontend can match on.
  */
 class GroupService {
+
+    /**
+     * Shared-lock key guarding removals from the "admin" group — see
+     * guardAdminGroupRemoval().
+     */
+    private const ADMIN_GROUP_LOCK = 'group_manager/admin-group-removal';
+
+    /**
+     * getMembers() pagination bounds — GM-10/GM-06: an omitted limit used to
+     * mean "no limit", letting a single request enumerate an entire
+     * backend; it now means DEFAULT_MEMBERS_LIMIT, same as the page size
+     * every caller already requests explicitly.
+     */
+    private const MIN_MEMBERS_LIMIT = 1;
+    private const MAX_MEMBERS_LIMIT = 200;
+    private const DEFAULT_MEMBERS_LIMIT = 50;
+
+    /** resolvePastedTokens() — GM-10: a single pasted line has no reason to be this long. */
+    private const MAX_TOKEN_LENGTH = 320;
+
+    /**
+     * searchCandidates() — GM-06: how many pages of IUserManager::search()
+     * (each $limit long) it examines at most while excluding $gid's own
+     * members one candidate at a time, before giving up rather than reading
+     * through the whole backend on a search with heavy overlap.
+     */
+    private const CANDIDATE_SEARCH_PAGE_BUDGET = 3;
 
     public function __construct(
         private IGroupManager $groupManager,
@@ -32,6 +61,7 @@ class GroupService {
         private FolderAssignmentService $folderAssignmentService,
         private IUserSession $userSession,
         private IL10N $l,
+        private ILockingProvider $lockingProvider,
     ) {
     }
 
@@ -48,74 +78,99 @@ class GroupService {
     }
 
     /**
-     * @return array{members: list<array{uid: string, displayName: string, email: ?string, enabled: bool}>, total: int|null}
+     * `hasMore` (GM-05) is derived from actually fetching one extra row, not
+     * from `total`: a backend that can enumerate members just fine can still
+     * answer `count()` with `false` (unknown), and the frontend used to
+     * treat that as "no more pages exist" — silently stranding every member
+     * past the first one loaded. `total`, when known, is still returned for
+     * display.
+     *
+     * @return array{members: list<array{uid: string, displayName: string, email: ?string, enabled: bool}>, total: int|null, hasMore: bool}
      */
     public function getMembers(string $gid, string $search = '', ?int $limit = null, int $offset = 0): array {
         $group = $this->requireGroup($gid);
-        $users = $group->searchUsers($search, $limit, $offset);
+        $limit = $this->validateMembersLimit($limit);
+        if ($offset < 0) {
+            throw new GroupServiceException($this->l->t('Offset must not be negative'), 'INVALID_PAGINATION', 400);
+        }
+        $users = array_values($group->searchUsers($search, $limit + 1, $offset));
+        $hasMore = count($users) > $limit;
+        if ($hasMore) {
+            $users = array_slice($users, 0, $limit);
+        }
         $total = $group->count($search);
 
         return [
-            'members' => array_map(fn ($user) => $this->describeUser($user), array_values($users)),
+            'members' => array_map(fn ($user) => $this->describeUser($user), $users),
             'total' => $total === false ? null : $total,
+            'hasMore' => $hasMore,
         ];
     }
 
     /**
-     * Users AND groups matching $search, for the single add-field: users
-     * already members of $gid are excluded (over-fetches from
-     * IUserManager::search() to absorb them, since there's no way to exclude
-     * at the query level); the group itself and groups with zero addable
-     * members are excluded from the group side. Group results always carry
-     * the count of members they'd actually add (their size minus the overlap
-     * with $gid), never their raw size.
+     * Users AND groups matching $search, for the single add-field.
      *
-     * @return array{users: list<array{uid: string, displayName: string}>, groups: list<array{id: string, displayName: string, backend: string, newMemberCount: int}>}
+     * GM-06: this used to enumerate every one of $gid's members
+     * (IGroup::getUsers(), unbounded) just to build an exclusion set for
+     * paging through IUserManager::search(), and every candidate group's
+     * own full membership (IGroup::getUsers() again) just to report how
+     * many of them were new — both synchronous, per keystroke. Excluding
+     * existing members is now IGroup::inGroup() checked one candidate at a
+     * time, over CANDIDATE_SEARCH_PAGE_BUDGET pages of the user search at
+     * most — bounded work regardless of $gid's size or the overlap with it.
+     * A candidate group's own overlap is no longer computed at all here:
+     * `memberCount` is its raw size (count(), can be unknown), not "how many
+     * it would add" — that number is cheap for exactly one group
+     * (expandGroupForAdd(), already bounded to that group's own members) and
+     * is computed there, once, only for the group the admin actually picks.
+     * Groups not worth offering (zero members) are excluded, but overlap is
+     * no longer a filter: an admin typing a search sees every matching
+     * group, same as for users.
+     *
+     * @return array{users: list<array{uid: string, displayName: string}>, groups: list<array{id: string, displayName: string, backend: string, memberCount: ?int}>}
      */
     public function searchCandidates(string $gid, string $search, int $limit = 10): array {
         $group = $this->requireGroup($gid);
-        $existingUids = array_flip(array_map(
-            static fn ($user) => $user->getUID(),
-            $group->getUsers(),
-        ));
 
         $users = [];
-        foreach ($this->userManager->search($search, $limit + count($existingUids), 0) as $user) {
-            if (isset($existingUids[$user->getUID()])) {
-                continue;
+        $offset = 0;
+        for ($page = 0; $page < self::CANDIDATE_SEARCH_PAGE_BUDGET && count($users) < $limit; $page++) {
+            $candidates = $this->userManager->search($search, $limit, $offset);
+            if (count($candidates) === 0) {
+                break;
             }
-            $users[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+            foreach ($candidates as $user) {
+                if ($group->inGroup($user)) {
+                    continue;
+                }
+                $users[] = ['uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+                if (count($users) >= $limit) {
+                    break;
+                }
+            }
+            $offset += count($candidates);
         }
         // IUserManager::search() doesn't guarantee display-name order (an
         // empty $search — used to browse candidates before typing — comes
         // back ordered by backend/uid instead), so sort explicitly.
         usort($users, static fn (array $a, array $b) => strnatcasecmp($a['displayName'], $b['displayName']));
-        $users = array_slice($users, 0, $limit);
 
         $groups = [];
         if ($search !== '') {
-            foreach ($this->groupManager->search($search) as $candidateGroup) {
+            foreach ($this->groupManager->search($search, $limit) as $candidateGroup) {
                 if ($candidateGroup->getGID() === $gid) {
                     continue;
                 }
-                $newMemberCount = 0;
-                foreach ($candidateGroup->getUsers() as $user) {
-                    if (!isset($existingUids[$user->getUID()])) {
-                        $newMemberCount++;
-                    }
-                }
-                if ($newMemberCount === 0) {
+                $memberCount = $this->nullableCount($candidateGroup->count());
+                if ($memberCount === 0) {
                     continue;
                 }
                 $groups[] = [
                     'id' => $candidateGroup->getGID(),
                     'displayName' => $candidateGroup->getDisplayName(),
                     'backend' => $this->describeBackend($candidateGroup)['backend'],
-                    'newMemberCount' => $newMemberCount,
+                    'memberCount' => $memberCount,
                 ];
-                if (count($groups) >= $limit) {
-                    break;
-                }
             }
         }
 
@@ -154,13 +209,33 @@ class GroupService {
      * matched (with the resolved user) or not — the caller decides what to
      * do with unmatched tokens (surface them, let the admin fix and retry).
      *
+     * `alreadyMember` (GM-07) is $gid's real, current membership
+     * (IGroup::inGroup(), not scoped by any page/filter) — the frontend used
+     * to decide this from whatever page of members it happened to have
+     * loaded, so a member outside that page or filter read as a brand-new
+     * addition.
+     *
      * @param list<string> $tokens
-     * @return list<array{token: string, matched: bool, uid: ?string, displayName: ?string}>
+     * @return list<array{token: string, matched: bool, uid: ?string, displayName: ?string, alreadyMember: bool}>
      */
     public function resolvePastedTokens(string $gid, array $tokens): array {
-        $this->requireGroup($gid);
+        $group = $this->requireGroup($gid);
         if (count($tokens) > 500) {
             throw new GroupServiceException($this->l->t('Too many entries pasted at once'), 'TOO_MANY_TOKENS', 400);
+        }
+        // The controller's `@param string[] $tokens` is a hint, not an
+        // enforced type: PHP's own request-body binding hands this method
+        // whatever JSON array the client sent, array/object/number entries
+        // included — trim() on anything but a string is a TypeError, not a
+        // clean 400. Checked as its own pass, before any entry is
+        // processed, so one bad entry can't leave a partial result set.
+        foreach ($tokens as $token) {
+            if (!is_string($token)) {
+                throw new GroupServiceException($this->l->t('Pasted entries must be text'), 'INVALID_TOKENS', 400);
+            }
+            if (strlen($token) > self::MAX_TOKEN_LENGTH) {
+                throw new GroupServiceException($this->l->t('A pasted entry is too long'), 'INVALID_TOKENS', 400);
+            }
         }
 
         $results = [];
@@ -181,8 +256,14 @@ class GroupService {
             }
 
             $results[] = $user === null
-                ? ['token' => $token, 'matched' => false, 'uid' => null, 'displayName' => null]
-                : ['token' => $token, 'matched' => true, 'uid' => $user->getUID(), 'displayName' => $user->getDisplayName()];
+                ? ['token' => $token, 'matched' => false, 'uid' => null, 'displayName' => null, 'alreadyMember' => false]
+                : [
+                    'token' => $token,
+                    'matched' => true,
+                    'uid' => $user->getUID(),
+                    'displayName' => $user->getDisplayName(),
+                    'alreadyMember' => $group->inGroup($user),
+                ];
         }
         return $results;
     }
@@ -220,8 +301,9 @@ class GroupService {
             throw new GroupServiceException($this->l->t('Removing members is not supported by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
 
-        if ($gid === 'admin' && $group->inGroup($user)) {
-            $this->guardAdminGroupRemoval($group, $user);
+        if ($gid === 'admin') {
+            $this->removeFromAdminGroupLocked($group, $user);
+            return;
         }
 
         if ($group->inGroup($user)) {
@@ -230,16 +312,51 @@ class GroupService {
     }
 
     /**
-     * The instance's admin group can never go interface-reachable-empty
-     * through this app: an admin can't remove themselves from it (the
-     * caller is always a current admin — this whole controller requires
-     * it — so refusing self-removal alone guarantees at least one admin
-     * always survives any single call here), and a defense-in-depth count
-     * check refuses to remove the group's last member outright. The count
-     * check is best-effort, not race-proof: two admins removing different
-     * members of "admin" at the same moment can both pass it before either
-     * IGroup::removeUser() call lands, since the public API exposes no
-     * transaction/lock to close that window.
+     * Removals from "admin" are serialized through OCP\Lock\ILockingProvider
+     * (an exclusive lock backed by the DB or Redis — a process/node-shared
+     * mechanism available on every supported version, unlike a PHP variable
+     * or a local file). Two admins removing different members of "admin" at
+     * the same moment used to both pass the count check before either
+     * IGroup::removeUser() call landed, since the public API exposes no
+     * transaction of its own to close that window; acquiring this lock
+     * first and re-reading membership/count only *after* it's held is what
+     * closes it, because nothing read before the lock can be trusted not to
+     * be stale by the time this runs.
+     *
+     * This only coordinates removals that go through this method. A removal
+     * issued by `occ group:removeuser`, the core Users admin page, or any
+     * other app's own IGroup::removeUser() call doesn't take this lock and
+     * isn't covered by this guarantee — a lock private to this app can't
+     * coordinate emitters it doesn't know about.
+     */
+    private function removeFromAdminGroupLocked(IGroup $group, \OCP\IUser $user): void {
+        try {
+            $this->lockingProvider->acquireLock(self::ADMIN_GROUP_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
+        } catch (LockedException) {
+            throw new GroupServiceException($this->l->t('Another admin group change is in progress, please try again'), 'ADMIN_GROUP_BUSY', 409);
+        }
+        try {
+            if (!$group->inGroup($user)) {
+                return;
+            }
+            $this->guardAdminGroupRemoval($group, $user);
+            $group->removeUser($user);
+        } finally {
+            $this->lockingProvider->releaseLock(self::ADMIN_GROUP_LOCK, ILockingProvider::LOCK_EXCLUSIVE);
+        }
+    }
+
+    /**
+     * Must only be called with ADMIN_GROUP_LOCK already held (see
+     * removeFromAdminGroupLocked()) — both checks below read state that's
+     * only trustworthy inside that protected section.
+     *
+     * An admin can't remove themselves from "admin" (the caller is always a
+     * current admin — this whole controller requires it — so refusing
+     * self-removal alone guarantees at least one admin always survives any
+     * single call here); the count check is the defense-in-depth backstop
+     * for everyone else. A count() the backend can't answer is treated the
+     * same as "not safe to remove" rather than silently let through.
      */
     private function guardAdminGroupRemoval(IGroup $group, \OCP\IUser $user): void {
         $currentUser = $this->userSession->getUser();
@@ -248,7 +365,10 @@ class GroupService {
         }
 
         $count = $group->count();
-        if ($count !== false && $count <= 1) {
+        if ($count === false) {
+            throw new GroupServiceException($this->l->t('Could not verify the number of administrators, please try again'), 'ADMIN_COUNT_UNKNOWN', 403);
+        }
+        if ($count <= 1) {
             throw new GroupServiceException($this->l->t('Cannot remove the last member of the admin group'), 'LAST_ADMIN_PROTECTED', 403);
         }
     }
@@ -257,6 +377,16 @@ class GroupService {
         $gid = trim($gid);
         if ($gid === '') {
             throw new GroupServiceException($this->l->t('Group ID cannot be empty'), 'INVALID_GROUP_ID', 400);
+        }
+        // GM-09 (contention, not the full fix): this app's own routes bind
+        // {gid} as '[^/]+', so a GID containing '/' — the backend itself
+        // accepts one — could never be opened, renamed or deleted through
+        // this API again once created. Refusing it at creation is cheap and
+        // covers the one path that can add a GID with a slash going
+        // forward; a group with one already existing (LDAP, occ, another
+        // app) is unaffected and still manageable everywhere but here.
+        if (str_contains($gid, '/')) {
+            throw new GroupServiceException($this->l->t('Group ID cannot contain "/"'), 'INVALID_GROUP_ID', 400);
         }
         if ($this->groupManager->groupExists($gid)) {
             throw new GroupServiceException($this->l->t('A group with this ID already exists'), 'GROUP_ALREADY_EXISTS', 409);
@@ -307,6 +437,20 @@ class GroupService {
         if (!$group->delete()) {
             throw new GroupServiceException($this->l->t('Delete was rejected by the backend'), 'BACKEND_UNSUPPORTED', 400);
         }
+    }
+
+    /**
+     * @return positive-int the effective limit — DEFAULT_MEMBERS_LIMIT when
+     * $limit is omitted, otherwise $limit itself once confirmed in range.
+     */
+    private function validateMembersLimit(?int $limit): int {
+        if ($limit === null) {
+            return self::DEFAULT_MEMBERS_LIMIT;
+        }
+        if ($limit < self::MIN_MEMBERS_LIMIT || $limit > self::MAX_MEMBERS_LIMIT) {
+            throw new GroupServiceException($this->l->t('Limit is out of range'), 'INVALID_PAGINATION', 400);
+        }
+        return $limit;
     }
 
     private function requireGroup(string $gid): IGroup {

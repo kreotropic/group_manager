@@ -33,7 +33,7 @@
 					:group-id="selectedId"
 					@renamed="onGroupRenamed"
 					@deleted="onGroupDeleted"
-					@pending-changed="hasPendingMemberChanges = $event" />
+					@pending-changed="onDetailPendingChanged" />
 			</div>
 		</div>
 
@@ -78,6 +78,21 @@ export default {
 			selectedId: null,
 			showCreateDialog: false,
 			hasPendingMemberChanges: false,
+			// GM-08: a batch is being sent right now (GroupDetail's own
+			// applying, covering both its members and folders managers) --
+			// navigating away is refused outright, not just guarded by a
+			// confirm(), since there's nothing sane to ask about a request
+			// already in flight and discarding it client-side wouldn't undo
+			// it server-side anyway.
+			applyingChanges: false,
+			// This app's own monotonic position in the navigation stack,
+			// mirrored into history.state by pushHistory() -- see
+			// onPopState() and utils/hash.js's pushGroupHash().
+			historyIndex: 0,
+			// Set right before this app calls history.go() itself, so the
+			// popstate that generates is recognized as our own reversal
+			// instead of being re-processed as a new user navigation.
+			suppressNextPopState: false,
 			announcement: '',
 		}
 	},
@@ -141,25 +156,74 @@ export default {
 			if (gid === this.selectedId) {
 				return
 			}
-			if (this.hasPendingMemberChanges && !window.confirm(
-				t('group_manager', 'You have unapplied member changes for this group. Discard them and switch groups?'),
-			)) {
+			if (!this.confirmNavigateAway()) {
 				return
 			}
 			this.hasPendingMemberChanges = false
 			this.selectedId = gid
-			pushGroupHash(gid)
+			this.pushHistory(gid)
 		},
 
 		/**
-		 * Reacting to the browser's own Back/Forward buttons — always honoured,
-		 * the pending-changes guard only applies to in-app navigation (a
-		 * popstate has already happened by the time this fires, so there's
-		 * nothing sane left to block).
+		 * True when it's safe to leave the current group right now. Shared by
+		 * selectGroup() and onPopState() (GM-08) so Back/Forward is held to
+		 * the exact same policy as clicking another group in the list,
+		 * including the hard applyingChanges refusal — a popstate has
+		 * already happened by the time onPopState() runs, but "already
+		 * happened" in the URL/history sense only; it's still reversible
+		 * with history.go(), which onPopState() does when this returns false.
+		 */
+		confirmNavigateAway() {
+			if (this.applyingChanges) {
+				return false
+			}
+			if (!this.hasPendingMemberChanges) {
+				return true
+			}
+			return window.confirm(
+				t('group_manager', 'You have unapplied member changes for this group. Discard them and switch groups?'),
+			)
+		},
+
+		/**
+		 * pushGroupHash() plus keeping historyIndex in step with it — every
+		 * caller that pushes a new entry goes through here so the two never
+		 * drift apart.
+		 */
+		pushHistory(gid) {
+			this.historyIndex++
+			pushGroupHash(gid, this.historyIndex)
+		},
+
+		/**
+		 * Reacting to the browser's own Back/Forward buttons. Unlike before,
+		 * this is no longer unconditionally honoured (GM-08): the jump the
+		 * browser already made is reverted with history.go() when
+		 * confirmNavigateAway() declines it, using the index carried in
+		 * history.state to know how many steps that takes and in which
+		 * direction — comparing groupId alone can't tell an older entry from
+		 * a newer one that happens to name the same group.
 		 */
 		onPopState(event) {
+			if (this.suppressNextPopState) {
+				this.suppressNextPopState = false
+				return
+			}
+
+			const targetIndex = event.state?.index ?? 0
+			const delta = targetIndex - this.historyIndex
 			const gid = event.state?.groupId ?? readGroupIdFromHash()
+
+			if (!this.confirmNavigateAway()) {
+				if (delta !== 0) {
+					this.suppressNextPopState = true
+					window.history.go(-delta)
+				}
+				return
+			}
+
 			this.hasPendingMemberChanges = false
+			this.historyIndex = targetIndex
 			this.selectedId = gid && this.groups.some((g) => g.id === gid) ? gid : null
 		},
 
@@ -196,9 +260,20 @@ export default {
 			if (this.selectedId === gid) {
 				this.hasPendingMemberChanges = false
 				this.selectedId = null
-				pushGroupHash(null)
+				this.pushHistory(null)
 			}
 			showSuccess(t('group_manager', 'Group "{name}" deleted.', { name: group?.displayName ?? gid }))
+		},
+
+		/**
+		 * GroupDetail aggregates both its members and folders managers into
+		 * one hasPendingChanges/applying pair (see its own pending-changed
+		 * docblock) — this app only needs the result, not which of the two
+		 * tabs it came from.
+		 */
+		onDetailPendingChanged({ hasPendingChanges, applying }) {
+			this.hasPendingMemberChanges = hasPendingChanges
+			this.applyingChanges = applying
 		},
 	},
 }

@@ -8,7 +8,7 @@
 			<div class="gm-mm__header">
 				<h3 v-if="!hideTitle" class="gm-mm__title">
 					{{ t('group_manager', 'Members') }}
-					<span v-if="total !== null" class="gm-mm__count">{{ headerCountText }}</span>
+					<span v-if="headerCountText" class="gm-mm__count">{{ headerCountText }}</span>
 				</h3>
 				<span v-else-if="hasPendingChanges" class="gm-mm__count">{{ afterApplyingText }}</span>
 
@@ -34,6 +34,9 @@
 							<NcLoadingIcon :size="16" />
 							{{ t('group_manager', 'Searching…') }}
 						</li>
+						<li v-else-if="addSearchError" class="gm-mm__add-status gm-mm__add-status--error">
+							{{ addSearchError }}
+						</li>
 						<template v-else-if="flatOptions.length === 0">
 							<li class="gm-mm__add-status">
 								{{ addQuery.trim() === ''
@@ -54,7 +57,7 @@
 								<AccountGroup v-if="option.kind === 'group'" :size="18" class="gm-mm__add-option-icon" />
 								<AccountOutline v-else :size="18" class="gm-mm__add-option-icon" />
 								<span class="gm-mm__add-option-name">{{ option.displayName }}</span>
-								<span v-if="option.kind === 'group'" class="gm-mm__add-option-count">{{ option.newMemberCount }}</span>
+								<span v-if="option.kind === 'group' && option.memberCount !== null" class="gm-mm__add-option-count">{{ option.memberCount }}</span>
 								<input v-else
 									type="checkbox"
 									class="gm-mm__add-option-check"
@@ -129,7 +132,14 @@
 				</div>
 			</div>
 
-			<div v-if="loading && members.length === 0" class="gm-mm__loading">
+			<NcNoteCard v-if="loadError" type="error" class="gm-mm__load-error">
+				{{ loadError }}
+				<NcButton variant="secondary" @click="reload">
+					{{ t('group_manager', 'Try again') }}
+				</NcButton>
+			</NcNoteCard>
+
+			<div v-else-if="loading && members.length === 0" class="gm-mm__loading">
 				<NcLoadingIcon :size="24" />
 			</div>
 
@@ -178,7 +188,11 @@
 				</div>
 			</div>
 
-			<NcButton v-if="hasMore"
+			<p v-if="loadMoreError" class="gm-mm__load-more-error">
+				{{ loadMoreError }}
+			</p>
+
+			<NcButton v-if="hasMore && !loadError"
 				class="gm-mm__more"
 				:disabled="applying || loadingMore"
 				@click="loadMore">
@@ -208,6 +222,7 @@
 
 <script>
 import { translate as t } from '@nextcloud/l10n'
+import { showInfo } from '@nextcloud/dialogs'
 import { confirmPassword } from '@nextcloud/password-confirmation'
 import '@nextcloud/password-confirmation/style.css'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
@@ -264,6 +279,15 @@ export default {
 			type: Boolean,
 			default: false,
 		},
+		// The group's real, unfiltered member count (GroupService::detail()'s
+		// memberCount) -- used for the "after applying" prediction instead of
+		// `total`, which is scoped to the current search filter and would
+		// otherwise silently stand in for the group's real size (GM-07). null
+		// when the backend can't answer count() at all.
+		totalMemberCount: {
+			type: Number,
+			default: null,
+		},
 	},
 
 	emits: ['changed', 'pending-changed'],
@@ -272,6 +296,20 @@ export default {
 		return {
 			members: [],
 			total: null,
+			// GM-05: sent by the server independently of `total` (which a
+			// backend can report as unknown -- count() returning false --
+			// even though it can still page reliably).
+			hasMore: false,
+			// GM-03/GM-04: '' (not shown), or the message from a failed reload --
+			// replaces the table instead of silently leaving it empty or stale
+			// (see reload()). loadMoreError is the same idea for loadMore(), kept
+			// separate so a failed "next page" doesn't hide members already shown.
+			loadError: '',
+			loadMoreError: '',
+			// Bumped on every filter change (immediately, before the debounce
+			// fires) and at the start of every reload() -- a response is only
+			// applied if this hasn't moved since the request started.
+			membersSeq: 0,
 			memberSearch: '',
 			offset: 0,
 			loading: true,
@@ -281,7 +319,14 @@ export default {
 			addQuery: '',
 			addSearching: false,
 			addResults: { users: [], groups: [] },
+			// '' (not shown), or the message from a failed candidate search --
+			// runAddSearch() used to let a rejected fetch leave addSearching=false
+			// with whatever addResults a previous search had left behind, so the
+			// dropdown quietly kept showing stale options instead of the failure.
+			addSearchError: '',
 			addSearchTimer: null,
+			// Same generation pattern as membersSeq, for the add-field dropdown.
+			addSearchSeq: 0,
 			showDropdown: false,
 			activeIndex: -1,
 
@@ -298,10 +343,6 @@ export default {
 	},
 
 	computed: {
-		hasMore() {
-			return this.total !== null && this.members.length < this.total
-		},
-
 		hasPendingChanges() {
 			return this.pendingAdd.length > 0 || this.pendingRemove.length > 0
 		},
@@ -316,7 +357,11 @@ export default {
 				kind: 'group',
 				id: g.id,
 				displayName: g.displayName,
-				newMemberCount: g.newMemberCount,
+				// GM-06: the group's own size, not "how many of them are new"
+				// -- computing that exactly required enumerating every
+				// candidate group's full membership on every keystroke. Can
+				// be null (backend can't answer count()).
+				memberCount: g.memberCount,
 			}))
 			const users = this.addResults.users.map((u) => ({
 				key: 'user-' + u.uid,
@@ -370,20 +415,44 @@ export default {
 			return [...addChips, ...groupChips, ...removeChips]
 		},
 
-		headerCountText() {
-			const current = this.total ?? this.members.length
-			if (!this.hasPendingChanges) {
-				return t('group_manager', '{count} members', { count: current })
+		/**
+		 * GM-07: the group's real, unfiltered member count for the "after
+		 * applying" prediction. `total` (from getMembers()) is scoped to
+		 * `memberSearch` -- with an active filter it's a subset count, not
+		 * the group's size, and must not silently stand in for it. Falls
+		 * back to `total` only with no filter active, where the two are
+		 * equivalent anyway; with a filter and no known real count (the
+		 * `totalMemberCount` prop itself unknown), this is null rather than
+		 * a number that would be wrong.
+		 */
+		effectiveTotal() {
+			if (this.totalMemberCount !== null) {
+				return this.totalMemberCount
 			}
-			return t('group_manager', '{current} members · {after} after applying', { current, after: this.afterApplyingCount })
+			return this.memberSearch === '' ? this.total : null
+		},
+
+		headerCountText() {
+			if (!this.hasPendingChanges) {
+				// v-if="total !== null" in the template used to gate this whole
+				// span; folded in here so headerCountText alone decides whether
+				// there's anything sensible to show.
+				return this.total === null ? '' : t('group_manager', '{count} members', { count: this.total })
+			}
+			if (this.effectiveTotal === null) {
+				return t('group_manager', '{count} pending change(s)', { count: this.pendingCount })
+			}
+			return t('group_manager', '{current} members · {after} after applying', { current: this.effectiveTotal, after: this.afterApplyingCount })
 		},
 
 		afterApplyingCount() {
-			const current = this.total ?? this.members.length
-			return current - this.pendingRemove.length + this.pendingAdd.length
+			return this.effectiveTotal - this.pendingRemove.length + this.pendingAdd.length
 		},
 
 		afterApplyingText() {
+			if (this.effectiveTotal === null) {
+				return t('group_manager', '{count} pending change(s)', { count: this.pendingCount })
+			}
 			return t('group_manager', '{after} after applying', { after: this.afterApplyingCount })
 		},
 
@@ -440,6 +509,8 @@ export default {
 	beforeUnmount() {
 		clearTimeout(this.memberSearchTimer)
 		clearTimeout(this.addSearchTimer)
+		this.membersSeq++
+		this.addSearchSeq++
 		document.removeEventListener('click', this.onDocumentClick)
 	},
 
@@ -467,24 +538,45 @@ export default {
 		},
 
 		onMemberSearchInput() {
+			// Invalidates anything already in flight right away, before the
+			// debounce below even fires -- otherwise a request started for the
+			// previous term could still win the race against this one.
+			this.membersSeq++
 			clearTimeout(this.memberSearchTimer)
 			this.memberSearchTimer = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS)
 		},
 
 		async reload() {
+			const seq = ++this.membersSeq
 			this.loading = true
+			this.loadError = ''
+			this.loadMoreError = ''
 			this.offset = 0
 			try {
 				const data = await fetchGroupMembers(this.groupId, {
 					search: this.memberSearch,
-					limit: PAGE_SIZE,
+					pageSize: PAGE_SIZE,
 					offset: 0,
 				})
+				if (seq !== this.membersSeq) {
+					return // superseded by a newer search/reload -- not the latest answer
+				}
 				this.members = data.members
 				this.total = data.total
+				this.hasMore = data.hasMore
 				this.offset = data.members.length
+			} catch (err) {
+				if (seq !== this.membersSeq) {
+					return
+				}
+				// Surfaced, not swallowed: a failed load must not read as "no
+				// members" (GM-04), and must not silently leave the table showing
+				// a pre-apply snapshot after applyChanges()'s own refresh fails.
+				this.loadError = extractErrorMessage(err, t('group_manager', 'Could not load members.'))
 			} finally {
-				this.loading = false
+				if (seq === this.membersSeq) {
+					this.loading = false
+				}
 			}
 		},
 
@@ -492,18 +584,35 @@ export default {
 			if (this.loadingMore) {
 				return
 			}
+			// Not bumped: loadMore() continues the CURRENT search generation
+			// rather than starting a new one, but still checked below so a
+			// filter change mid-flight discards this page instead of appending
+			// results for a search that's no longer current.
+			const seq = this.membersSeq
 			this.loadingMore = true
+			this.loadMoreError = ''
 			try {
 				const data = await fetchGroupMembers(this.groupId, {
 					search: this.memberSearch,
-					limit: PAGE_SIZE,
+					pageSize: PAGE_SIZE,
 					offset: this.offset,
 				})
+				if (seq !== this.membersSeq) {
+					return
+				}
 				this.members = this.members.concat(data.members)
 				this.total = data.total
+				this.hasMore = data.hasMore
 				this.offset += data.members.length
+			} catch (err) {
+				if (seq !== this.membersSeq) {
+					return
+				}
+				this.loadMoreError = extractErrorMessage(err, t('group_manager', 'Could not load more members.'))
 			} finally {
-				this.loadingMore = false
+				if (seq === this.membersSeq) {
+					this.loadingMore = false
+				}
 			}
 		},
 
@@ -537,13 +646,34 @@ export default {
 		 */
 		runAddSearch() {
 			clearTimeout(this.addSearchTimer)
+			// Invalidates anything already in flight right away, before the
+			// debounce below even fires -- otherwise a request started for the
+			// previous term could still win the race against this one and
+			// overwrite addResults with an answer to a search nobody sees anymore.
+			this.addSearchSeq++
 			const term = this.addQuery.trim()
 			this.addSearching = true
+			this.addSearchError = ''
 			this.addSearchTimer = setTimeout(async () => {
+				const seq = ++this.addSearchSeq
 				try {
-					this.addResults = await searchGroupCandidates(this.groupId, term, 10)
+					const results = await searchGroupCandidates(this.groupId, term, 10)
+					if (seq !== this.addSearchSeq) {
+						return
+					}
+					this.addResults = results
+				} catch (err) {
+					if (seq !== this.addSearchSeq) {
+						return
+					}
+					// Surfaced, not left as a silently stale addResults + an
+					// unhandled rejection (GM-04) -- this setTimeout callback has
+					// no caller left to catch it.
+					this.addSearchError = extractErrorMessage(err, t('group_manager', 'Could not search.'))
 				} finally {
-					this.addSearching = false
+					if (seq === this.addSearchSeq) {
+						this.addSearching = false
+					}
 				}
 			}, SEARCH_DEBOUNCE_MS)
 		},
@@ -567,15 +697,39 @@ export default {
 		async reviewPastedList(lines) {
 			try {
 				const results = await resolvePastedList(this.groupId, lines)
-				const alreadyQueuedOrMember = new Set([
-					...this.members.map((m) => m.uid),
-					...this.pendingAdd.map((i) => i.uid),
-				])
-				this.pasteReview = {
-					matched: results.filter((r) => r.matched && !alreadyQueuedOrMember.has(r.uid)),
-					alreadyMember: results.filter((r) => r.matched && alreadyQueuedOrMember.has(r.uid)),
-					unmatched: results.filter((r) => !r.matched),
+				// GM-07: membership comes from the server's own alreadyMember
+				// (the group's real membership, via IGroup::inGroup()) -- not
+				// this.members, which is only whatever page/filter happens to
+				// be loaded and used to read as "not a member" for anyone
+				// outside it. A pending removal puts the person back in
+				// "would be added", since they're on their way out; a pending
+				// add makes them already-accounted-for without a second entry.
+				const pendingAddUids = new Set(this.pendingAdd.map((i) => i.uid))
+				const pendingRemoveUids = new Set(this.pendingRemove.map((i) => i.uid))
+				const matched = []
+				const alreadyMember = []
+				const unmatched = []
+				// Two different pasted tokens (uid + email, or a duplicate
+				// line) can resolve to the same account -- counted once here,
+				// so the review doesn't show two rows for one person applying
+				// as one addUserToQueue() call anyway (it already dedupes).
+				const seenUids = new Set()
+				for (const r of results) {
+					if (!r.matched) {
+						unmatched.push(r)
+						continue
+					}
+					if (seenUids.has(r.uid)) {
+						continue
+					}
+					seenUids.add(r.uid)
+					if (pendingAddUids.has(r.uid) || (r.alreadyMember && !pendingRemoveUids.has(r.uid))) {
+						alreadyMember.push(r)
+					} else {
+						matched.push(r)
+					}
 				}
+				this.pasteReview = { matched, alreadyMember, unmatched }
 			} catch (err) {
 				this.pasteReview = { matched: [], alreadyMember: [], unmatched: lines.map((token) => ({ token })) }
 			}
@@ -637,13 +791,26 @@ export default {
 			this.closeDropdown()
 			try {
 				const members = await expandGroupForAdd(this.groupId, group.id)
+				if (members.length === 0) {
+					// GM-06: the picker no longer knows in advance how much
+					// this group overlaps with the current one -- it shows
+					// every matching group, not just ones with new members
+					// (that would need enumerating every candidate's full
+					// membership on every keystroke). This is the ordinary
+					// outcome for a group that turns out to be a subset,
+					// not a failure -- say so, since nothing else will.
+					showInfo(t('group_manager', 'Everyone in "{name}" is already a member.', { name: group.displayName }))
+					return
+				}
 				for (const member of members) {
 					this.addUserToQueue({ ...member, fromGroup: { id: group.id, displayName: group.displayName } })
 				}
 			} catch {
-				// Silently no-op — the picker already only offered groups with
-				// newMemberCount > 0, so a failure here is rare (race with a
-				// concurrent change); nothing was queued, nothing to undo.
+				// Silently no-op, same as before GM-06 -- still a rare
+				// network/server failure with nothing queued to undo, just
+				// no longer justified by "only offered when non-empty" (that
+				// assumption is gone; the empty case is handled above, not
+				// here).
 			}
 		},
 
@@ -762,8 +929,15 @@ export default {
 			this.pendingRemove = this.pendingRemove.filter((i) => !doneRemoveUids.has(i.uid))
 			this.applying = false
 
-			await this.reload()
+			// Emitted before the refresh below, not after: the write above
+			// already succeeded (lastResult reflects exactly what happened), and
+			// GroupDetail's own summary shouldn't wait on -- or be skipped by a
+			// failure of -- this table's own reload(). reload() surfaces its own
+			// failure as loadError instead of throwing (GM-04), so a failed
+			// refresh here shows an explicit error in the table, never a silent
+			// stale list passed off as current.
 			this.$emit('changed')
+			await this.reload()
 		},
 
 		retryFailed() {
@@ -882,6 +1056,10 @@ export default {
 	padding: 8px 10px;
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
+}
+
+.gm-mm__add-status--error {
+	color: var(--color-error-text);
 }
 
 .gm-mm__add-option {
@@ -1061,6 +1239,19 @@ export default {
 
 .gm-mm__empty {
 	color: var(--color-text-maxcontrast);
+}
+
+.gm-mm__load-error {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.gm-mm__load-more-error {
+	margin: 8px 0 0;
+	color: var(--color-error-text);
+	font-size: 13px;
 }
 
 .gm-mm__table {

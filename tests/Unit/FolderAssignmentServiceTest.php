@@ -13,6 +13,7 @@ use OCA\GroupManager\Service\GroupServiceException;
 use OCP\App\IAppManager;
 use OCP\Files\Cache\ICacheEntry;
 use OCP\IDBConnection;
+use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IUserSession;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -29,18 +30,21 @@ use PHPUnit\Framework\TestCase;
  * no groupfolders class needs to be loadable.
  *
  * Still left to a future integration test against a real instance:
- * isLegacyGroupFolders(), rootStorageId(), fetchAllFolders(), fetchFolder()
- * and mountPointExists() themselves, and every public method that calls
- * through manager()/rootFolder() (Server::get()) — those need groupfolders'
- * classes/tables (or, for rootFolder(), a real Nextcloud service container)
- * to actually exist. build/nc-instance.sh's per-Nextcloud-version matrix
- * (including groupfolders 19.x, where this fix's normalization path matters)
- * covers that ground instead. Notably, OCP\Files\IRootFolder itself can't
- * even be constructor-injected here for that reason: it extends
- * OC\Hooks\Emitter, an internal (non-OCP) interface this project's bare CI
- * environment has no autoloader for — rootFolder() is resolved lazily via
- * Server::get(), the same pattern manager() already used, precisely so that
- * merely instantiating this service (as every test below does) never needs it.
+ * isLegacyGroupFolders(), rootStorageId(), fetchAllFolders(), fetchFolder(),
+ * mountPointExists() and fetchAssignedFolderIds() (GM-06) themselves, and
+ * every public method that calls through manager()/rootFolder()
+ * (Server::get()) — those need groupfolders' classes/tables (or, for
+ * rootFolder(), a real Nextcloud service container) to actually exist.
+ * build/nc-instance.sh's per-Nextcloud-version matrix (including
+ * groupfolders 19.x, where this fix's normalization path matters) covers
+ * that ground instead, plus build/api-check.py's own GM-06 checks (folders:
+ * folderCount/listAssigned use the direct query, not a full sweep).
+ * Notably, OCP\Files\IRootFolder itself can't even be constructor-injected
+ * here for that reason: it extends OC\Hooks\Emitter, an internal (non-OCP)
+ * interface this project's bare CI environment has no autoloader for —
+ * rootFolder() is resolved lazily via Server::get(), the same pattern
+ * manager() already used, precisely so that merely instantiating this
+ * service (as every test below does) never needs it.
  */
 class FolderAssignmentServiceTest extends TestCase {
 
@@ -48,6 +52,7 @@ class FolderAssignmentServiceTest extends TestCase {
     private IUserSession&MockObject $userSession;
     private IL10N&MockObject $l;
     private IDBConnection&MockObject $db;
+    private IGroupManager&MockObject $groupManager;
     private FolderAssignmentService $service;
 
     protected function setUp(): void {
@@ -56,12 +61,35 @@ class FolderAssignmentServiceTest extends TestCase {
         $this->l = $this->createMock(IL10N::class);
         $this->l->method('t')->willReturnArgument(0);
         $this->db = $this->createMock(IDBConnection::class);
+        $this->groupManager = $this->createMock(IGroupManager::class);
         $this->service = new FolderAssignmentService(
             $this->appManager,
             $this->userSession,
             $this->l,
             $this->db,
+            $this->groupManager,
         );
+    }
+
+    /**
+     * assignFolder/createFolder/setPermissions/setQuota/listAssigned/
+     * searchAssignable all call requireGroup() before touching anything
+     * that needs groupfolders' own backend (manager()/Server::get()) — see
+     * FolderAssignmentService::requireGroup()'s docblock — so the
+     * GROUP_NOT_FOUND path for each is reachable here, unlike the rest of
+     * those methods.
+     */
+    private function assertRejectsMissingGroup(callable $action): void {
+        $this->appManager->method('isEnabledForUser')->willReturn(true);
+        $this->groupManager->method('get')->with('ghost')->willReturn(null);
+
+        try {
+            $action();
+            $this->fail('Expected GroupServiceException');
+        } catch (GroupServiceException $e) {
+            $this->assertSame('GROUP_NOT_FOUND', $e->errorCode);
+            $this->assertSame(404, $e->httpStatus);
+        }
     }
 
     private function encode(bool $write, bool $share, bool $delete): int {
@@ -314,4 +342,35 @@ class FolderAssignmentServiceTest extends TestCase {
     // fetchFolder()/mountPointExists()) needs a real Nextcloud service
     // container — see this file's class docblock — and is covered by
     // build/nc-instance.sh's matrix instead, not here.
+
+    // -----------------------------------------------------------------
+    // requireGroup() — GM-02: no read or write against a nonexistent group.
+    // -----------------------------------------------------------------
+
+    public function testListAssignedRejectsMissingGroup(): void {
+        $this->assertRejectsMissingGroup(fn () => $this->service->listAssigned('ghost'));
+    }
+
+    public function testSearchAssignableRejectsMissingGroup(): void {
+        $this->assertRejectsMissingGroup(fn () => $this->service->searchAssignable('ghost', ''));
+    }
+
+    public function testAssignFolderRejectsMissingGroup(): void {
+        $this->assertRejectsMissingGroup(fn () => $this->service->assignFolder('ghost', 5));
+    }
+
+    public function testCreateFolderRejectsMissingGroupBeforeTouchingGroupfolders(): void {
+        $this->assertRejectsMissingGroup(fn () => $this->service->createFolder('ghost', 'Shared'));
+    }
+
+    public function testSetPermissionsRejectsMissingGroup(): void {
+        $this->assertRejectsMissingGroup(fn () => $this->service->setPermissions('ghost', 5, true, false, false));
+    }
+
+    public function testSetQuotaRejectsMissingGroup(): void {
+        // A valid, non-negative quota, so this reaches requireGroup() rather
+        // than being rejected earlier by the quota-value check itself.
+        $this->assertRejectsMissingGroup(fn () => $this->service->setQuota('ghost', 5, 1000));
+    }
+
 }

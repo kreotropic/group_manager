@@ -70,6 +70,7 @@
 					ref="membersManager"
 					:group-id="group.id"
 					:hide-title="showTabs"
+					:total-member-count="group.memberCount"
 					class="gm-detail__tab-content"
 					@changed="onMembersChanged"
 					@pending-changed="onMembersPendingChanged" />
@@ -276,6 +277,10 @@ export default {
 				this.loadGroup()
 			},
 		},
+
+		applying() {
+			this.emitPendingState()
+		},
 	},
 
 	methods: {
@@ -324,12 +329,23 @@ export default {
 
 		onMembersPendingChanged(payload) {
 			this.membersPending = payload
-			this.$emit('pending-changed', this.hasPendingChanges)
+			this.emitPendingState()
 		},
 
 		onFoldersPendingChanged(payload) {
 			this.foldersPending = payload
-			this.$emit('pending-changed', this.hasPendingChanges)
+			this.emitPendingState()
+		},
+
+		/**
+		 * hasPendingChanges and applying (GM-08) are each aggregated across
+		 * both tabs here (App.vue doesn't need to know which tab a change or
+		 * an in-flight batch belongs to), and re-emitted together on every
+		 * change to either — applying flips in applyAll() below, not through
+		 * either *PendingChanged handler above, so it needs the same watch.
+		 */
+		emitPendingState() {
+			this.$emit('pending-changed', { hasPendingChanges: this.hasPendingChanges, applying: this.applying })
 		},
 
 		discardAll() {

@@ -23,6 +23,95 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   doesn't exist before 20 (`mountPointExists()`) is replaced with a direct
   query against its own table, mirroring how `folder_protection` already
   reads groupfolders' schema instead of its unstable internal API.
+- **Two admins removing each other from the `admin` group at the same
+  moment could both succeed, leaving the instance with no administrators.**
+  `removeMember()` now serializes removals from `admin` through an
+  `OCP\Lock\ILockingProvider` exclusive lock, re-reading membership and the
+  admin count only after acquiring it; a backend that can't answer the count
+  at all is now treated as unsafe rather than let through. This closes the
+  race for removals made through this app; it can't coordinate an admin
+  removed some other way (`occ`, the core Users page, another app).
+- **A group folder could be assigned, created, or have its permissions/quota
+  changed for a group ID that doesn't exist** — a typo, or a group deleted
+  between being picked and the request landing — leaving an association that
+  silently grants full access the moment a group with that ID exists again
+  (LDAP re-sync, or an admin recreating it). `FolderAssignmentService` now
+  requires the group to exist before every such write. Unassigning is
+  deliberately exempt, so an association left over from before this fix (or
+  from this exact race, which a lookup-then-write can narrow but not close)
+  can still be removed.
+- **Pasting a list of users into "add members" showed a wrong count of new
+  members** when the account belonged to the group but was outside the
+  currently loaded/filtered page — the frontend decided membership from
+  whatever page it had, not the group's real membership. `resolvePastedList`
+  now reports each entry's real membership from the server. The "N members
+  after applying" prediction also no longer uses the search-filtered member
+  count as if it were the group's real size.
+- Going back or forward in the browser past a group with unapplied member or
+  folder changes used to discard them without asking — only switching groups
+  from the list itself was guarded. Back/Forward now asks the same question,
+  and reverts the jump if declined; while a batch is actually being applied,
+  navigating away (either way) is refused outright, not just guarded by a
+  prompt.
+- A search whose response arrived out of order (members, add-field
+  candidates, or assignable folders) could overwrite the current results
+  with a stale answer to an earlier, already-superseded search. Every such
+  search now discards an answer that's no longer for the latest query.
+- A failed member/folder list load, or a failed refresh right after
+  successfully applying changes, showed an empty or stale list with no
+  indication anything had gone wrong. These now show an explicit error with
+  a way to retry, and a successful write's own result is no longer hidden by
+  a follow-up refresh failing.
+- Group member pages could not be paged past the first one whenever the
+  backend could enumerate members but couldn't answer a plain count
+  (`count()` returning `false`, seen with some LDAP setups) — the frontend
+  required a known total to show "Load more". Paging now uses a `hasMore`
+  flag the API derives from an extra fetched row, independent of the total.
+- Creating a group whose ID contains `/` succeeded but left it permanently
+  unreachable through this app's own API (every route needs `/`-free IDs) —
+  rejected at creation now. A group with `/` in its ID created some other
+  way (occ, LDAP) is unaffected and still manageable everywhere else.
+- Malformed input reached internal errors (HTTP 500) instead of a clean
+  `400`: non-string entries pasted into the add-members list, and
+  out-of-range `limit`/`offset` values for a group's member list. Both are
+  now validated up front with a stable error code.
+- **The add-members search for whole groups used to enumerate every member
+  of the destination group, and every candidate group's own full
+  membership, on every keystroke** — a large directory made this measurably
+  slow. Membership is now checked one candidate at a time, up to
+  a fixed page budget; a candidate group's entry shows its own size, not an
+  exact "how many would be new" count (computed once, cheaply, only for the
+  group actually picked). Opening a group's Folders tab, or counting its
+  folders for the sidebar, no longer reads every group folder in the
+  instance to find the ones assigned to it — both now query the assignment
+  table directly for that group.
+
+### Known limitations
+- The lock preventing the last-admin race, and the existence checks
+  preventing orphaned folder associations, only coordinate operations made
+  through this app. `occ`, the core Users settings page, or another app can
+  still race with — or bypass — either.
+- A folder-association row left over from before this release, or from a
+  group deleted through some other route while this app was mid-request,
+  isn't found or cleaned up automatically; only `unassignFolder()` can
+  remove it, and only once someone notices it.
+- A group ID containing `/` created before this release (or through `occ`,
+  LDAP, another app) remains unreachable through this app's own group
+  routes; only creating a *new* one that way is now rejected.
+- Group folders NOT yet assigned to a group (the assignment field's search)
+  are still found by reading every group folder in the instance — there's no
+  per-group index for "absent from this group's assignment list" the way
+  there is for "assigned to it".
+- The groups list itself (left-hand panel) still loads every group and its
+  member count up front; it isn't paged.
+- On Nextcloud 34+, a request for a group's member list with a `pageSize`
+  outside `[1, 500]` and no other malformed input gets this app's own clean
+  `400` (worked around: the parameter isn't named `limit`, which the
+  AppFramework's own request dispatcher special-cases as of that version).
+  The add-field's candidate search and the folder-assignment search still
+  use a parameter literally named `limit` and are not worked around the same
+  way — an extreme, out-of-range value there can still surface as that
+  framework's own raw 500 on 34/35.
 
 ### Added
 - **Nextcloud 35 support**, verified against a disposable instance the same

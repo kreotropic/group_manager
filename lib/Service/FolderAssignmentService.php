@@ -12,6 +12,7 @@ namespace OCA\GroupManager\Service;
 use OCP\App\IAppManager;
 use OCP\Constants;
 use OCP\IDBConnection;
+use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IUserSession;
 use OCP\Server;
@@ -64,6 +65,7 @@ class FolderAssignmentService {
         private IUserSession $userSession,
         private IL10N $l,
         private IDBConnection $db,
+        private IGroupManager $groupManager,
     ) {
     }
 
@@ -75,23 +77,45 @@ class FolderAssignmentService {
         return $this->appManager->isEnabledForUser('groupfolders', $this->userSession->getUser());
     }
 
+    /**
+     * GM-06: a bare count, so it goes straight to a row count against
+     * group_folders_groups (see fetchAssignedFolderIds()) rather than
+     * through listAssigned(), which fetches every assigned folder's full
+     * details one at a time — this is called for every group detail
+     * request, whether or not the admin ever opens the Folders tab.
+     */
     public function folderCount(string $gid): int {
         if (!$this->isEnabled()) {
             return 0;
         }
-        return count($this->listAssigned($gid));
+        $this->requireGroup($gid);
+        return count($this->fetchAssignedFolderIds($gid));
     }
 
     /**
+     * GM-06: used to call fetchAllFolders(), pulling every group folder in
+     * the instance — with its size and mapping cache — just to keep the
+     * handful assigned to $gid. The folder IDs assigned to $gid come from
+     * one direct, indexed query instead (fetchAssignedFolderIds(), the same
+     * approach mountPointExists() already uses); only those folders' own
+     * details are then fetched, one at a time, bounding the work to $gid's
+     * own assignment count rather than the instance's total folder count.
+     *
      * @return list<array<string, mixed>>
      */
     public function listAssigned(string $gid): array {
         $this->requireEnabled();
+        $this->requireGroup($gid);
         $out = [];
-        foreach ($this->fetchAllFolders() as $folder) {
-            if ($this->groupHasAccess($folder, $gid)) {
-                $out[] = $this->describeFolder($folder, $gid);
+        foreach ($this->fetchAssignedFolderIds($gid) as $folderId) {
+            $folder = $this->fetchFolder($folderId);
+            if ($folder === null) {
+                // A row surviving the folder it pointed at being removed
+                // some other way than through this app — skip rather than
+                // error; unassignFolder() is what cleans rows like this up.
+                continue;
             }
+            $out[] = $this->describeFolder($folder, $gid);
         }
         usort($out, static fn (array $a, array $b) => strnatcasecmp($a['mountPoint'], $b['mountPoint']));
         return $out;
@@ -101,10 +125,21 @@ class FolderAssignmentService {
      * Group folders NOT yet assigned to $gid, name-matching $search — the
      * pool for the assignment field's dropdown.
      *
+     * Still goes through fetchAllFolders(), unlike listAssigned()/
+     * folderCount() since GM-06: name-matching against *unassigned* folders
+     * has no per-group indexed shortcut the way "assigned to $gid" does
+     * (fetchAssignedFolderIds()) — every group folder's own assignment list
+     * has to be looked at to know it's absent from $gid's. Left as the one
+     * remaining full sweep in this class; a future fix would need either a
+     * name index on group_folders itself or paging groupfolders' own
+     * getAllFoldersWithSize() (not available on every supported version —
+     * see isLegacyGroupFolders()).
+     *
      * @return list<array{id: int, mountPoint: string, quota: int, size: int, acl: bool}>
      */
     public function searchAssignable(string $gid, string $search, int $limit = 10): array {
         $this->requireEnabled();
+        $this->requireGroup($gid);
         $needle = mb_strtolower(trim($search));
         $out = [];
         $folders = $this->fetchAllFolders();
@@ -135,6 +170,7 @@ class FolderAssignmentService {
      */
     public function assignFolder(string $gid, int $folderId): array {
         $this->requireEnabled();
+        $this->requireGroup($gid);
         $folder = $this->requireFolder($folderId);
         if ($this->groupHasAccess($folder, $gid)) {
             throw new GroupServiceException($this->l->t('Group already has access to this folder'), 'FOLDER_ALREADY_ASSIGNED', 409);
@@ -153,6 +189,10 @@ class FolderAssignmentService {
      */
     public function createFolder(string $gid, string $mountPoint): array {
         $this->requireEnabled();
+        // Checked before anything that touches groupfolders' own backend: a
+        // typo'd or since-deleted GID must not end up owning a brand-new
+        // group folder (see requireGroup()'s docblock).
+        $this->requireGroup($gid);
         // Checked here, before trimMountpoint(): an empty/all-slashes string
         // normalizes to '/' in that method, which it then returns early
         // WITHOUT throwing (that path exists to let '/' mount a Team folder
@@ -189,6 +229,14 @@ class FolderAssignmentService {
         return $this->describeFolder($this->requireFolder($folderId), $gid);
     }
 
+    /**
+     * Deliberately does NOT call requireGroup(): this is the one write this
+     * service must keep allowing for a $gid that no longer exists, since
+     * it's the only way to clear an association left over from before this
+     * fix (or from a group deleted after being assigned, which this app
+     * still can't coordinate — see requireGroup()) without leaving it
+     * sitting there as a silent grant if the same GID is ever reused.
+     */
     public function unassignFolder(string $gid, int $folderId): void {
         $this->requireEnabled();
         $this->requireFolder($folderId);
@@ -200,6 +248,7 @@ class FolderAssignmentService {
      */
     public function setPermissions(string $gid, int $folderId, bool $write, bool $share, bool $delete): array {
         $this->requireEnabled();
+        $this->requireGroup($gid);
         $folder = $this->requireFolder($folderId);
         if (!$this->groupHasAccess($folder, $gid)) {
             throw new GroupServiceException($this->l->t('Group does not have access to this folder'), 'FOLDER_NOT_ASSIGNED', 404);
@@ -221,6 +270,7 @@ class FolderAssignmentService {
         if ($quota !== \OCP\Files\FileInfo::SPACE_UNLIMITED && $quota < 0) {
             throw new GroupServiceException($this->l->t('Invalid quota value'), 'INVALID_QUOTA', 400);
         }
+        $this->requireGroup($gid);
         $folder = $this->requireFolder($folderId);
         if (!$this->groupHasAccess($folder, $gid)) {
             throw new GroupServiceException($this->l->t('Group does not have access to this folder'), 'FOLDER_NOT_ASSIGNED', 404);
@@ -232,6 +282,23 @@ class FolderAssignmentService {
     private function requireEnabled(): void {
         if (!$this->isEnabled()) {
             throw new GroupServiceException($this->l->t('Group folders app is not enabled'), 'GROUPFOLDERS_DISABLED', 404);
+        }
+    }
+
+    /**
+     * A group must exist before this app reads or writes its folder
+     * assignments — the pre-existing code skipped this, so a typo'd or
+     * since-deleted GID could be handed full access to a folder that takes
+     * effect the moment a group with that GID exists again (LDAP re-sync,
+     * or an admin simply recreating the group). Checking here, right before
+     * the write, narrows but does not close the window against a group
+     * deleted concurrently with this same request — this app does not
+     * coordinate with whatever deletes the group. unassignFolder() is the
+     * deliberate exception; see its own docblock.
+     */
+    private function requireGroup(string $gid): void {
+        if ($this->groupManager->get($gid) === null) {
+            throw new GroupServiceException($this->l->t('Group not found'), 'GROUP_NOT_FOUND', 404);
         }
     }
 
@@ -373,6 +440,29 @@ class FolderAssignmentService {
         $count = (int) $result->fetchOne();
         $result->closeCursor();
         return $count > 0;
+    }
+
+    /**
+     * GM-06: the folder IDs assigned to $gid, straight from group_folders'
+     * own applicable-groups table — same approach as mountPointExists(),
+     * and what lets listAssigned()/folderCount() avoid fetchAllFolders().
+     * circle_id = '' excludes circle rows the same way groupHasAccess()'s
+     * `type === 'group'` check does for the array shape fetchAllFolders()/
+     * fetchFolder() return (see addApplicableGroup(), which writes exactly
+     * this pairing: a group row's circle_id is always '').
+     *
+     * @return list<int>
+     */
+    private function fetchAssignedFolderIds(string $gid): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('folder_id')
+            ->from('group_folders_groups')
+            ->where($qb->expr()->eq('group_id', $qb->createNamedParameter($gid)))
+            ->andWhere($qb->expr()->eq('circle_id', $qb->createNamedParameter('')));
+        $result = $qb->executeQuery();
+        $ids = array_map('intval', $result->fetchAll(\PDO::FETCH_COLUMN));
+        $result->closeCursor();
+        return $ids;
     }
 
     /**

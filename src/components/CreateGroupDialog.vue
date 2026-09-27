@@ -105,6 +105,14 @@ export default {
 				this.errorMessage = t('group_manager', 'Group ID cannot be empty.')
 				return false
 			}
+			// Mirrors the server-side check (GroupService::createGroup, GM-09):
+			// this app's own routes can't address a GID containing '/', so a
+			// group created with one could never be opened again here.
+			if (gid.includes('/')) {
+				this.fieldError = true
+				this.errorMessage = t('group_manager', 'Group ID cannot contain "/".')
+				return false
+			}
 
 			try {
 				await confirmPassword()

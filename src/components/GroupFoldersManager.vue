@@ -27,6 +27,9 @@
 							<NcLoadingIcon :size="16" />
 							{{ t('group_manager', 'Searching…') }}
 						</li>
+						<li v-else-if="addSearchError" class="gm-fm__add-status gm-fm__add-status--error">
+							{{ addSearchError }}
+						</li>
 						<template v-else-if="addResults.length === 0">
 							<li class="gm-fm__add-status">
 								{{ addQuery.trim() === ''
@@ -87,7 +90,14 @@
 				</span>
 			</div>
 
-			<div v-if="loading" class="gm-fm__loading">
+			<NcNoteCard v-if="loadError" type="error" class="gm-fm__load-error">
+				{{ loadError }}
+				<NcButton variant="secondary" @click="reload">
+					{{ t('group_manager', 'Try again') }}
+				</NcButton>
+			</NcNoteCard>
+
+			<div v-else-if="loading" class="gm-fm__loading">
 				<NcLoadingIcon :size="24" />
 			</div>
 
@@ -295,12 +305,25 @@ export default {
 		return {
 			folders: [],
 			loading: true,
+			// GM-04: '' (not shown), or the message from a failed reload --
+			// replaces the table instead of silently leaving it on an empty or
+			// stale folder list (see reload()).
+			loadError: '',
 			showCreateFolderDialog: false,
 
 			addQuery: '',
 			addSearching: false,
 			addResults: [],
+			// '' (not shown), or the message from a failed assignable-folder
+			// search -- runAddSearch() used to let a rejected fetch leave
+			// addSearching=false with whatever addResults a previous search had
+			// left behind, so the dropdown quietly kept showing stale options.
+			addSearchError: '',
 			addSearchTimer: null,
+			// Bumped on every new search (immediately, before the debounce fires,
+			// and again when the debounced fetch actually starts) -- a response
+			// is only applied if this hasn't moved since the request started.
+			addSearchSeq: 0,
 			showDropdown: false,
 			activeIndex: -1,
 
@@ -448,6 +471,7 @@ export default {
 
 	beforeUnmount() {
 		clearTimeout(this.addSearchTimer)
+		this.addSearchSeq++
 		document.removeEventListener('click', this.onDocumentClick)
 	},
 
@@ -469,8 +493,13 @@ export default {
 
 		async reload() {
 			this.loading = true
+			this.loadError = ''
 			try {
 				this.folders = await fetchGroupFolders(this.groupId)
+			} catch (err) {
+				// Surfaced, not swallowed: a failed load must not read as "no
+				// folders assigned" (GM-04). `folders` is left as it was.
+				this.loadError = extractErrorMessage(err, t('group_manager', 'Could not load folders.'))
 			} finally {
 				this.loading = false
 			}
@@ -478,8 +507,14 @@ export default {
 
 		async onFolderCreated(folder) {
 			this.showCreateFolderDialog = false
-			await this.reload()
+			// Emitted before the refresh below: the folder was already created
+			// successfully (that's the only way this handler fires) -- GroupDetail's
+			// own summary shouldn't wait on, or be skipped by a failure of, this
+			// table's own reload(). reload() surfaces its own failure as loadError
+			// instead of throwing, so a failed refresh here shows an explicit
+			// error in the table rather than silently keeping the old list.
 			this.$emit('changed')
+			await this.reload()
 			showSuccess(t('group_manager', 'Group folder "{name}" created.', { name: folder.mountPoint }))
 		},
 
@@ -520,12 +555,34 @@ export default {
 		 */
 		runAddSearch() {
 			clearTimeout(this.addSearchTimer)
+			// Invalidates anything already in flight right away, before the
+			// debounce below even fires -- otherwise a request started for the
+			// previous term could still win the race against this one and
+			// overwrite addResults with an answer to a search nobody sees anymore.
+			this.addSearchSeq++
+			const term = this.addQuery.trim()
 			this.addSearching = true
+			this.addSearchError = ''
 			this.addSearchTimer = setTimeout(async () => {
+				const seq = ++this.addSearchSeq
 				try {
-					this.addResults = await searchAssignableFolders(this.groupId, this.addQuery.trim(), 10)
+					const results = await searchAssignableFolders(this.groupId, term, 10)
+					if (seq !== this.addSearchSeq) {
+						return
+					}
+					this.addResults = results
+				} catch (err) {
+					if (seq !== this.addSearchSeq) {
+						return
+					}
+					// Surfaced, not left as a silently stale addResults + an
+					// unhandled rejection (GM-04) -- this setTimeout callback has
+					// no caller left to catch it.
+					this.addSearchError = extractErrorMessage(err, t('group_manager', 'Could not search.'))
 				} finally {
-					this.addSearching = false
+					if (seq === this.addSearchSeq) {
+						this.addSearching = false
+					}
 				}
 			}, SEARCH_DEBOUNCE_MS)
 		},
@@ -763,8 +820,10 @@ export default {
 			)
 			this.applying = false
 
-			await this.reload()
+			// Emitted before the refresh below, not after -- see onFolderCreated()'s
+			// comment for why (same reasoning, same reload()).
 			this.$emit('changed')
+			await this.reload()
 		},
 
 		retryFailed() {
@@ -857,6 +916,10 @@ export default {
 	padding: 8px 10px;
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
+}
+
+.gm-fm__add-status--error {
+	color: var(--color-error-text);
 }
 
 .gm-fm__add-hint {
@@ -970,6 +1033,13 @@ export default {
 
 .gm-fm__empty {
 	color: var(--color-text-maxcontrast);
+}
+
+.gm-fm__load-error {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
 }
 
 .gm-fm__table {

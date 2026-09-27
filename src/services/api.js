@@ -28,7 +28,12 @@ export async function fetchGroup(gid) {
  * Fetch a page of a group's members.
  *
  * @param {string} gid
- * @param {object} params { search, limit, offset }
+ * @param {object} params { search, pageSize, offset } -- pageSize, not
+ *   limit: GroupController::members() takes that name specifically so a
+ *   value outside its own bounds gets that controller's own clean 400
+ *   (GM-10) rather than Nextcloud's own dispatcher silently clamping any
+ *   parameter literally named "limit" to [1, 500] and 500ing outside it
+ *   (NC 34+; see that method's docblock).
  */
 export async function fetchGroupMembers(gid, params = {}) {
 	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/members'), { params })

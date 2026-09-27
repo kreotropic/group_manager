@@ -29,9 +29,16 @@ export function readGroupIdFromHash() {
  * Push a new history entry pointing at `gid` (or strip the hash entirely
  * when `gid` is null). Pushing (not replacing) lets the browser's back/
  * forward buttons step through previously selected groups.
+ *
+ * `index` (GM-08) is the caller's own monotonic navigation counter, carried
+ * in `state` alongside `groupId`. It's what a popstate handler compares
+ * against its last-known position to tell how far a Back/Forward jump moved
+ * (and in which direction), which is what makes reverting a declined jump
+ * with `history.go()` possible — comparing groupId alone can't do that (an
+ * older AND a newer entry both plausibly point at some other group).
  */
-export function pushGroupHash(gid) {
+export function pushGroupHash(gid, index) {
 	const base = window.location.pathname + window.location.search
 	const url = gid ? `${base}${GROUP_HASH_PREFIX}${encodeURIComponent(gid)}` : base
-	window.history.pushState({ groupId: gid }, '', url)
+	window.history.pushState({ groupId: gid, index }, '', url)
 }

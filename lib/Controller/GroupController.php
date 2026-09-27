@@ -39,8 +39,22 @@ class GroupController extends Controller {
         return $this->guarded(fn () => new DataResponse($this->groupService->getGroup($gid)));
     }
 
-    public function members(string $gid, string $search = '', ?int $limit = null, int $offset = 0): DataResponse {
-        return $this->guarded(fn () => new DataResponse($this->groupService->getMembers($gid, $search, $limit, $offset)));
+    /**
+     * Not $limit: Nextcloud's own AppFramework Dispatcher special-cases any
+     * controller parameter named exactly that, silently clamping it to
+     * [1, 500] — a value outside that range never reaches this method or
+     * GroupService's own INVALID_PAGINATION validation (GM-10) at all,
+     * failing instead as an uncaught ParameterOutOfRangeException (a raw
+     * 500, not JSON) before the framework even routes here. Confirmed
+     * present on NC 34/35 and absent on 31–33 (the dispatcher's own
+     * ensureParameterValueSatisfiesRange() only gained this "limit" case
+     * with a 3rd, $default, argument somewhere in that gap) while building
+     * this app's own matrix. $pageSize is exempt from the special-casing,
+     * so this app's own bounds (and error shape) are what a client actually
+     * sees on every version this app supports.
+     */
+    public function members(string $gid, string $search = '', ?int $pageSize = null, int $offset = 0): DataResponse {
+        return $this->guarded(fn () => new DataResponse($this->groupService->getMembers($gid, $search, $pageSize, $offset)));
     }
 
     public function candidates(string $gid, string $search = '', int $limit = 10): DataResponse {

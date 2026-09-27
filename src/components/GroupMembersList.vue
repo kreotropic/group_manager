@@ -22,7 +22,14 @@
 				</NcTextField>
 			</div>
 
-			<div v-if="loading && members.length === 0" class="gm-members__loading">
+			<NcNoteCard v-if="loadError" type="error" class="gm-members__error">
+				{{ loadError }}
+				<NcButton variant="secondary" @click="reload">
+					{{ t('group_manager', 'Try again') }}
+				</NcButton>
+			</NcNoteCard>
+
+			<div v-else-if="loading && members.length === 0" class="gm-members__loading">
 				<NcLoadingIcon :size="24" />
 			</div>
 
@@ -45,7 +52,11 @@
 				</li>
 			</ul>
 
-			<NcButton v-if="hasMore"
+			<p v-if="loadMoreError" class="gm-members__load-more-error">
+				{{ loadMoreError }}
+			</p>
+
+			<NcButton v-if="hasMore && !loadError"
 				class="gm-members__more"
 				:disabled="loadingMore"
 				@click="loadMore">
@@ -63,9 +74,11 @@ import { translate as t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import Magnify from 'vue-material-design-icons/Magnify.vue'
 import { fetchGroupMembers } from '../services/api.js'
+import { extractErrorMessage } from '../utils/errors.js'
 
 const PAGE_SIZE = 50
 const SEARCH_DEBOUNCE_MS = 300
@@ -77,6 +90,7 @@ export default {
 		NcAvatar,
 		NcButton,
 		NcLoadingIcon,
+		NcNoteCard,
 		NcTextField,
 		Magnify,
 	},
@@ -92,18 +106,32 @@ export default {
 		return {
 			members: [],
 			total: null,
+			// GM-05: whether the API answered with a full page, sent by the
+			// server independently of `total` (which a backend can report as
+			// unknown -- count() returning false -- even though it can still
+			// page reliably). Relying on `total` here used to strand a group's
+			// members past the first page whenever the backend couldn't
+			// answer count().
+			hasMore: false,
+			// GM-03/GM-04: '' (not shown), or the message from a failed
+			// reload -- replaces the list instead of silently leaving it
+			// empty or stale (see reload()). loadMoreError is the same idea
+			// for loadMore(), kept separate so a failed "next page" doesn't
+			// hide the members already on screen.
+			loadError: '',
+			loadMoreError: '',
+			// Bumped whenever a request in flight must stop being able to
+			// win: on every filter change (immediately, before the debounce
+			// even fires) and at the start of every reload(). A response is
+			// only applied if this hasn't moved since the request started --
+			// otherwise it's an answer to a search that's no longer current.
+			membersSeq: 0,
 			search: '',
 			offset: 0,
 			loading: true,
 			loadingMore: false,
 			searchTimer: null,
 		}
-	},
-
-	computed: {
-		hasMore() {
-			return this.total !== null && this.members.length < this.total
-		},
 	},
 
 	watch: {
@@ -119,30 +147,51 @@ export default {
 
 	beforeUnmount() {
 		clearTimeout(this.searchTimer)
+		this.membersSeq++
 	},
 
 	methods: {
 		t,
 
 		onSearchInput() {
+			// Invalidates anything already in flight right away, before the
+			// debounce below even fires -- otherwise a request started for
+			// the previous term could still win the race against this one.
+			this.membersSeq++
 			clearTimeout(this.searchTimer)
 			this.searchTimer = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS)
 		},
 
 		async reload() {
+			const seq = ++this.membersSeq
 			this.loading = true
+			this.loadError = ''
+			this.loadMoreError = ''
 			this.offset = 0
 			try {
 				const data = await fetchGroupMembers(this.groupId, {
 					search: this.search,
-					limit: PAGE_SIZE,
+					pageSize: PAGE_SIZE,
 					offset: 0,
 				})
+				if (seq !== this.membersSeq) {
+					return // superseded by a newer search/reload -- not the latest answer
+				}
 				this.members = data.members
 				this.total = data.total
+				this.hasMore = data.hasMore
 				this.offset = data.members.length
+			} catch (err) {
+				if (seq !== this.membersSeq) {
+					return
+				}
+				// Surfaced, not swallowed: a failed load must not read as "no
+				// members" (GM-04). members/total are left as they were.
+				this.loadError = extractErrorMessage(err, t('group_manager', 'Could not load members.'))
 			} finally {
-				this.loading = false
+				if (seq === this.membersSeq) {
+					this.loading = false
+				}
 			}
 		},
 
@@ -150,18 +199,35 @@ export default {
 			if (this.loadingMore) {
 				return
 			}
+			// Not bumped: loadMore() continues the CURRENT search generation
+			// rather than starting a new one, but still checked below so a
+			// filter change mid-flight discards this page instead of
+			// appending results for a search that's no longer current.
+			const seq = this.membersSeq
 			this.loadingMore = true
+			this.loadMoreError = ''
 			try {
 				const data = await fetchGroupMembers(this.groupId, {
 					search: this.search,
-					limit: PAGE_SIZE,
+					pageSize: PAGE_SIZE,
 					offset: this.offset,
 				})
+				if (seq !== this.membersSeq) {
+					return
+				}
 				this.members = this.members.concat(data.members)
 				this.total = data.total
+				this.hasMore = data.hasMore
 				this.offset += data.members.length
+			} catch (err) {
+				if (seq !== this.membersSeq) {
+					return
+				}
+				this.loadMoreError = extractErrorMessage(err, t('group_manager', 'Could not load more members.'))
 			} finally {
-				this.loadingMore = false
+				if (seq === this.membersSeq) {
+					this.loadingMore = false
+				}
 			}
 		},
 	},
@@ -213,6 +279,19 @@ export default {
 
 .gm-members__empty {
 	color: var(--color-text-maxcontrast);
+}
+
+.gm-members__error {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.gm-members__load-more-error {
+	margin: 8px 0 0;
+	color: var(--color-error-text);
+	font-size: 13px;
 }
 
 .gm-members__grid {
