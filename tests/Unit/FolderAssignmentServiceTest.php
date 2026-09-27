@@ -11,6 +11,8 @@ namespace OCA\GroupManager\Tests\Unit;
 use OCA\GroupManager\Service\FolderAssignmentService;
 use OCA\GroupManager\Service\GroupServiceException;
 use OCP\App\IAppManager;
+use OCP\Files\Cache\ICacheEntry;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserSession;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -20,19 +22,32 @@ use PHPUnit\Framework\TestCase;
  * encodePermissions()/decodePermissions() are exercised via reflection
  * because they are private — but, unlike the rest of this class, they take
  * and return only primitives, so they need no groupfolders class at all.
- * Everything else here (describeFolder(), searchAssignable(), ...) needs
- * `OCA\GroupFolders\Folder\FolderWithMappingsAndCache`, which is not
- * autoloadable outside a full Nextcloud bootstrap (confirmed: class_exists()
- * on it returns false under just lib/composer/autoload.php +
- * 3rdparty/autoload.php, the same autoloaders tests/bootstrap.php loads) —
- * covering those is left to a future integration test against a real
- * instance rather than faked here.
+ * The same is now true of normalizeFolder(), groupHasAccess() and
+ * describeFolder(): the service was rewritten to convert groupfolders'
+ * result into a plain array before touching it (see FolderAssignmentService's
+ * class docblock), so plain arrays/objects are enough to exercise them here —
+ * no groupfolders class needs to be loadable.
+ *
+ * Still left to a future integration test against a real instance:
+ * isLegacyGroupFolders(), rootStorageId(), fetchAllFolders(), fetchFolder()
+ * and mountPointExists() themselves, and every public method that calls
+ * through manager()/rootFolder() (Server::get()) — those need groupfolders'
+ * classes/tables (or, for rootFolder(), a real Nextcloud service container)
+ * to actually exist. build/nc-instance.sh's per-Nextcloud-version matrix
+ * (including groupfolders 19.x, where this fix's normalization path matters)
+ * covers that ground instead. Notably, OCP\Files\IRootFolder itself can't
+ * even be constructor-injected here for that reason: it extends
+ * OC\Hooks\Emitter, an internal (non-OCP) interface this project's bare CI
+ * environment has no autoloader for — rootFolder() is resolved lazily via
+ * Server::get(), the same pattern manager() already used, precisely so that
+ * merely instantiating this service (as every test below does) never needs it.
  */
 class FolderAssignmentServiceTest extends TestCase {
 
     private IAppManager&MockObject $appManager;
     private IUserSession&MockObject $userSession;
     private IL10N&MockObject $l;
+    private IDBConnection&MockObject $db;
     private FolderAssignmentService $service;
 
     protected function setUp(): void {
@@ -40,7 +55,13 @@ class FolderAssignmentServiceTest extends TestCase {
         $this->userSession = $this->createMock(IUserSession::class);
         $this->l = $this->createMock(IL10N::class);
         $this->l->method('t')->willReturnArgument(0);
-        $this->service = new FolderAssignmentService($this->appManager, $this->userSession, $this->l);
+        $this->db = $this->createMock(IDBConnection::class);
+        $this->service = new FolderAssignmentService(
+            $this->appManager,
+            $this->userSession,
+            $this->l,
+            $this->db,
+        );
     }
 
     private function encode(bool $write, bool $share, bool $delete): int {
@@ -54,6 +75,56 @@ class FolderAssignmentServiceTest extends TestCase {
     private function decode(int $permissions): array {
         $method = new \ReflectionMethod($this->service, 'decodePermissions');
         return $method->invokeArgs($this->service, [$permissions]);
+    }
+
+    private function normalize(array|object $folder): array {
+        $method = new \ReflectionMethod($this->service, 'normalizeFolder');
+        return $method->invokeArgs($this->service, [$folder]);
+    }
+
+    private function groupHasAccess(array $folder, string $gid): bool {
+        $method = new \ReflectionMethod($this->service, 'groupHasAccess');
+        return $method->invokeArgs($this->service, [$folder, $gid]);
+    }
+
+    private function describeFolder(array $folder, string $gid): array {
+        $method = new \ReflectionMethod($this->service, 'describeFolder');
+        return $method->invokeArgs($this->service, [$folder, $gid]);
+    }
+
+    /**
+     * A groupfolders pre-20 FolderManager::getFolder()/getAllFoldersWithSize()
+     * row: a plain array, snake_case keys, 'size' possibly a numeric string
+     * straight off the DB row.
+     */
+    private function legacyFolderRow(): array {
+        return [
+            'id' => '7',
+            'mount_point' => 'Finance',
+            'quota' => -3,
+            'size' => '12345',
+            'acl' => 1,
+            'groups' => ['finance' => ['displayName' => 'finance', 'permissions' => 31, 'type' => 'group']],
+        ];
+    }
+
+    /**
+     * The 20+ shape: a FolderWithMappingsAndCache-like object (an anonymous
+     * class stands in for it — the real class isn't autoloadable here, and
+     * normalizeFolder() never names it, only checks is_array()).
+     */
+    private function modernFolder(): object {
+        $cacheEntry = $this->createMock(ICacheEntry::class);
+        $cacheEntry->method('getSize')->willReturn(12345);
+        return new class ($cacheEntry) {
+            public int $id = 7;
+            public string $mountPoint = 'Finance';
+            public int $quota = -3;
+            public bool $acl = true;
+            public array $groups = ['finance' => ['displayName' => 'finance', 'permissions' => 31, 'type' => 'group']];
+            public function __construct(public ICacheEntry $rootCacheEntry) {
+            }
+        };
     }
 
     public function testEncodePermissionsAlwaysIncludesRead(): void {
@@ -149,4 +220,98 @@ class FolderAssignmentServiceTest extends TestCase {
             $this->assertSame(404, $e->httpStatus);
         }
     }
+
+    // -----------------------------------------------------------------
+    // normalizeFolder(): groupfolders pre-20 (array) vs 20+ (object) shapes
+    // -----------------------------------------------------------------
+
+    private function expectedNormalizedFolder(): array {
+        return [
+            'id' => 7,
+            'mountPoint' => 'Finance',
+            'quota' => -3,
+            'size' => 12345,
+            'acl' => true,
+            'groups' => ['finance' => ['displayName' => 'finance', 'permissions' => 31, 'type' => 'group']],
+        ];
+    }
+
+    public function testNormalizeFolderFromLegacyArray(): void {
+        $this->assertSame($this->expectedNormalizedFolder(), $this->normalize($this->legacyFolderRow()));
+    }
+
+    public function testNormalizeFolderFromModernObject(): void {
+        $this->assertSame($this->expectedNormalizedFolder(), $this->normalize($this->modernFolder()));
+    }
+
+    public function testNormalizeFolderLegacyAndModernAgreeOnEquivalentInput(): void {
+        // The regression this fix is for: whichever groupfolders release
+        // answers, the rest of the service must see the exact same shape.
+        $this->assertSame(
+            $this->normalize($this->legacyFolderRow()),
+            $this->normalize($this->modernFolder()),
+        );
+    }
+
+    public function testNormalizeFolderDefaultsMissingLegacyGroups(): void {
+        $row = $this->legacyFolderRow();
+        unset($row['groups']);
+        $this->assertSame([], $this->normalize($row)['groups']);
+    }
+
+    // -----------------------------------------------------------------
+    // groupHasAccess()
+    // -----------------------------------------------------------------
+
+    public function testGroupHasAccessTrueForGroupEntry(): void {
+        $folder = $this->normalize($this->legacyFolderRow());
+        $this->assertTrue($this->groupHasAccess($folder, 'finance'));
+    }
+
+    public function testGroupHasAccessFalseForCircleEntry(): void {
+        $folder = $this->normalize($this->legacyFolderRow());
+        $folder['groups']['finance']['type'] = 'circle';
+        $this->assertFalse($this->groupHasAccess($folder, 'finance'));
+    }
+
+    public function testGroupHasAccessFalseWhenGroupMissing(): void {
+        $folder = $this->normalize($this->legacyFolderRow());
+        $this->assertFalse($this->groupHasAccess($folder, 'no_such_group'));
+    }
+
+    public function testGroupHasAccessDefaultsMissingTypeToGroup(): void {
+        $folder = $this->normalize($this->legacyFolderRow());
+        unset($folder['groups']['finance']['type']);
+        $this->assertTrue($this->groupHasAccess($folder, 'finance'));
+    }
+
+    // -----------------------------------------------------------------
+    // describeFolder()
+    // -----------------------------------------------------------------
+
+    public function testDescribeFolderShapeAndPermissions(): void {
+        $folder = $this->normalize($this->legacyFolderRow());
+        $this->assertSame(
+            [
+                'id' => 7,
+                'mountPoint' => 'Finance',
+                'quota' => -3,
+                'size' => 12345,
+                'acl' => true,
+                'permissions' => ['write' => true, 'share' => true, 'delete' => true], // 31
+            ],
+            $this->describeFolder($folder, 'finance'),
+        );
+    }
+
+    public function testDescribeFolderDefaultsMissingGroupPermissionsToZero(): void {
+        $folder = $this->normalize($this->legacyFolderRow());
+        $described = $this->describeFolder($folder, 'no_such_group');
+        $this->assertSame(['write' => false, 'share' => false, 'delete' => false], $described['permissions']);
+    }
+
+    // rootStorageId() itself (and isLegacyGroupFolders()/fetchAllFolders()/
+    // fetchFolder()/mountPointExists()) needs a real Nextcloud service
+    // container — see this file's class docblock — and is covered by
+    // build/nc-instance.sh's matrix instead, not here.
 }

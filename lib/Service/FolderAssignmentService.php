@@ -11,6 +11,7 @@ namespace OCA\GroupManager\Service;
 
 use OCP\App\IAppManager;
 use OCP\Constants;
+use OCP\IDBConnection;
 use OCP\IL10N;
 use OCP\IUserSession;
 use OCP\Server;
@@ -20,6 +21,28 @@ use OCP\Server;
  * it would be eagerly resolved, only reached via Server::get() after
  * isEnabled() has already gated the call) to let a group's folder access be
  * assigned/removed and its per-group permissions edited.
+ *
+ * groupfolders' own PHP API is not stable across its releases, and this
+ * service used to depend on it more than it needed to: pre-20, `FolderManager`
+ * returns folders as plain arrays and requires a storage id to list them;
+ * 20+ wraps the same data in a `FolderWithMappingsAndCache` object and made
+ * that argument optional (confirmed against 19.1.20 through 23.0.1). Every
+ * result that crosses that boundary is funnelled through normalizeFolder()
+ * into one array shape, so nothing below this point — including
+ * requireFolder()'s return type — ever names a groupfolders class. The one
+ * exception is manager() itself, an untyped Server::get() reached only after
+ * requireEnabled(); mountPointExists() also avoids groupfolders' own method
+ * (absent before 20) by querying its table directly, the same way
+ * folder_protection's AdminController::fetchGroupFolderMountPoints() does.
+ *
+ * rootFolder() is resolved the same lazy way, not constructor-injected:
+ * OCP\Files\IRootFolder extends OCP\Files\Folder and OC\Hooks\Emitter, and
+ * that second, internal (non-OCP) interface isn't part of the
+ * `nextcloud/ocp` stub package this app's unit tests build against —
+ * constructing an instance of this class, real or mocked, with IRootFolder
+ * as a constructor parameter fails wherever the tests run (this project's
+ * CI included, which has no full Nextcloud install), not only in the one
+ * code path that needs it.
  *
  * Permission model confirmed live against groupfolders' own admin UI
  * (2026-09-17, /settings/admin/groupfolders — request payloads inspected
@@ -33,10 +56,14 @@ class FolderAssignmentService {
     private const PERM_DELETE = Constants::PERMISSION_DELETE;
     private const PERM_READ = Constants::PERMISSION_READ;
 
+    /** Cache for isLegacyGroupFolders() — a Reflection call, not worth repeating per request. */
+    private ?bool $legacyGroupFolders = null;
+
     public function __construct(
         private IAppManager $appManager,
         private IUserSession $userSession,
         private IL10N $l,
+        private IDBConnection $db,
     ) {
     }
 
@@ -61,7 +88,7 @@ class FolderAssignmentService {
     public function listAssigned(string $gid): array {
         $this->requireEnabled();
         $out = [];
-        foreach ($this->manager()->getAllFoldersWithSize() as $folder) {
+        foreach ($this->fetchAllFolders() as $folder) {
             if ($this->groupHasAccess($folder, $gid)) {
                 $out[] = $this->describeFolder($folder, $gid);
             }
@@ -80,21 +107,21 @@ class FolderAssignmentService {
         $this->requireEnabled();
         $needle = mb_strtolower(trim($search));
         $out = [];
-        $folders = array_values($this->manager()->getAllFoldersWithSize());
-        usort($folders, static fn ($a, $b) => strnatcasecmp($a->mountPoint, $b->mountPoint));
+        $folders = $this->fetchAllFolders();
+        usort($folders, static fn (array $a, array $b) => strnatcasecmp($a['mountPoint'], $b['mountPoint']));
         foreach ($folders as $folder) {
             if ($this->groupHasAccess($folder, $gid)) {
                 continue;
             }
-            if ($needle !== '' && !str_contains(mb_strtolower($folder->mountPoint), $needle)) {
+            if ($needle !== '' && !str_contains(mb_strtolower($folder['mountPoint']), $needle)) {
                 continue;
             }
             $out[] = [
-                'id' => $folder->id,
-                'mountPoint' => $folder->mountPoint,
-                'quota' => $folder->quota,
-                'size' => $folder->rootCacheEntry->getSize(),
-                'acl' => $folder->acl,
+                'id' => $folder['id'],
+                'mountPoint' => $folder['mountPoint'],
+                'quota' => $folder['quota'],
+                'size' => $folder['size'],
+                'acl' => $folder['acl'],
             ];
             if (count($out) >= $limit) {
                 break;
@@ -142,7 +169,7 @@ class FolderAssignmentService {
         if ($mountPoint === '/') {
             throw new GroupServiceException($this->l->t('Invalid folder name'), 'INVALID_MOUNT_POINT', 400);
         }
-        if ($this->manager()->mountPointExists($mountPoint)) {
+        if ($this->mountPointExists($mountPoint)) {
             throw new GroupServiceException($this->l->t('A group folder with this name already exists'), 'FOLDER_ALREADY_EXISTS', 409);
         }
         $folderId = $this->manager()->createFolder($mountPoint);
@@ -208,8 +235,8 @@ class FolderAssignmentService {
         }
     }
 
-    private function requireFolder(int $folderId): \OCA\GroupFolders\Folder\FolderWithMappingsAndCache {
-        $folder = $this->manager()->getFolder($folderId);
+    private function requireFolder(int $folderId): array {
+        $folder = $this->fetchFolder($folderId);
         if ($folder === null) {
             throw new GroupServiceException($this->l->t('Group folder not found'), 'GROUP_FOLDER_NOT_FOUND', 404);
         }
@@ -217,27 +244,135 @@ class FolderAssignmentService {
     }
 
     /**
-     * $folder->groups is keyed by entity id (group OR circle) with a `type`
+     * $folder['groups'] is keyed by entity id (group OR circle) with a `type`
      * discriminator — only 'group' entries are this app's concern.
      */
-    private function groupHasAccess(\OCA\GroupFolders\Folder\FolderWithMappingsAndCache $folder, string $gid): bool {
-        $entry = $folder->groups[$gid] ?? null;
+    private function groupHasAccess(array $folder, string $gid): bool {
+        $entry = $folder['groups'][$gid] ?? null;
         return $entry !== null && ($entry['type'] ?? 'group') === 'group';
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function describeFolder(\OCA\GroupFolders\Folder\FolderWithMappingsAndCache $folder, string $gid): array {
-        $permissions = $folder->groups[$gid]['permissions'] ?? 0;
+    private function describeFolder(array $folder, string $gid): array {
+        $permissions = $folder['groups'][$gid]['permissions'] ?? 0;
         return [
-            'id' => $folder->id,
-            'mountPoint' => $folder->mountPoint,
-            'quota' => $folder->quota,
-            'size' => $folder->rootCacheEntry->getSize(),
-            'acl' => $folder->acl,
+            'id' => $folder['id'],
+            'mountPoint' => $folder['mountPoint'],
+            'quota' => $folder['quota'],
+            'size' => $folder['size'],
+            'acl' => $folder['acl'],
             'permissions' => $this->decodePermissions($permissions),
         ];
+    }
+
+    /**
+     * groupfolders before 20 requires a $rootStorageId argument to
+     * getAllFoldersWithSize()/getFolder() (it feeds a sharding-aware query
+     * join and is a no-op on a non-sharded setup, which is the overwhelming
+     * common case); 20+ made it fully optional. Checked via Reflection on
+     * the actual required-parameter count rather than
+     * class_exists(FolderWithMappingsAndCache::class): a misdetection there
+     * would silently call getAllFoldersWithSize($storageId) on 20+, whose
+     * first positional parameter is $offset instead — wrong results, not a
+     * loud failure. Reflection asks exactly the question each call site
+     * depends on, so it can't produce that mismatch.
+     */
+    private function isLegacyGroupFolders(): bool {
+        if ($this->legacyGroupFolders === null) {
+            $this->legacyGroupFolders = (new \ReflectionMethod(
+                \OCA\GroupFolders\Folder\FolderManager::class,
+                'getAllFoldersWithSize',
+            ))->getNumberOfRequiredParameters() > 0;
+        }
+        return $this->legacyGroupFolders;
+    }
+
+    /**
+     * Only meaningful pre-20's $rootStorageId argument (see
+     * isLegacyGroupFolders()) — matches what groupfolders' own pre-20
+     * controllers/commands pass, rather than a hardcoded 0, which would
+     * silently misbehave on a sharded filecache setup.
+     */
+    private function rootStorageId(): int {
+        return $this->rootFolder()->getMountPoint()->getNumericStorageId() ?? 0;
+    }
+
+    private function rootFolder(): \OCP\Files\IRootFolder {
+        return Server::get(\OCP\Files\IRootFolder::class);
+    }
+
+    /**
+     * Turns whatever getFolder()/getAllFoldersWithSize() returned — a plain
+     * array pre-20, a FolderWithMappingsAndCache object on 20+ — into one
+     * fixed shape used everywhere else in this class, so nothing past this
+     * point needs to know which one it got.
+     *
+     * @return array{id: int, mountPoint: string, quota: int, size: int, acl: bool, groups: array}
+     */
+    private function normalizeFolder(array|object $f): array {
+        if (is_array($f)) {
+            // Pre-20: keys are snake_case, and 'size' can come back as a
+            // numeric string (getFolder() does `$row['size'] ?: 0` over a raw
+            // DB row).
+            return [
+                'id' => (int) $f['id'],
+                'mountPoint' => (string) $f['mount_point'],
+                'quota' => (int) $f['quota'],
+                'size' => (int) ($f['size'] ?? 0),
+                'acl' => (bool) $f['acl'],
+                'groups' => $f['groups'] ?? [],
+            ];
+        }
+        // 20+: FolderWithMappingsAndCache. getSize() can return a float.
+        return [
+            'id' => $f->id,
+            'mountPoint' => $f->mountPoint,
+            'quota' => $f->quota,
+            'size' => (int) ($f->rootCacheEntry?->getSize() ?? 0),
+            'acl' => $f->acl,
+            'groups' => $f->groups,
+        ];
+    }
+
+    /**
+     * @return list<array{id: int, mountPoint: string, quota: int, size: int, acl: bool, groups: array}>
+     */
+    private function fetchAllFolders(): array {
+        $folders = $this->isLegacyGroupFolders()
+            ? $this->manager()->getAllFoldersWithSize($this->rootStorageId())
+            : $this->manager()->getAllFoldersWithSize();
+        return array_values(array_map($this->normalizeFolder(...), $folders));
+    }
+
+    /**
+     * @return array{id: int, mountPoint: string, quota: int, size: int, acl: bool, groups: array}|null
+     */
+    private function fetchFolder(int $folderId): ?array {
+        $folder = $this->isLegacyGroupFolders()
+            ? $this->manager()->getFolder($folderId, $this->rootStorageId())
+            : $this->manager()->getFolder($folderId);
+        return $folder === null ? null : $this->normalizeFolder($folder);
+    }
+
+    /**
+     * groupfolders' own mountPointExists() doesn't exist before 20, so this
+     * runs the same query its 20+ implementation runs, directly against its
+     * table — the same approach folder_protection's
+     * AdminController::fetchGroupFolderMountPoints() already uses instead of
+     * going through groupfolders' PHP API. Version-independent by
+     * construction: no branch needed.
+     */
+    private function mountPointExists(string $mountPoint): bool {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select($qb->func()->count('*', 'c'))
+            ->from('group_folders')
+            ->where($qb->expr()->eq('mount_point', $qb->createNamedParameter($mountPoint)));
+        $result = $qb->executeQuery();
+        $count = (int) $result->fetchOne();
+        $result->closeCursor();
+        return $count > 0;
     }
 
     /**

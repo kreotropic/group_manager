@@ -37,7 +37,7 @@ folders and their per-group permissions and quota, without leaving Settings.
 
     <dependencies>
         <php min-version="8.1"/>
-        <nextcloud min-version="31" max-version="34"/>
+        <nextcloud min-version="31" max-version="35"/>
     </dependencies>
 
     <settings>

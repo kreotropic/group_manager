@@ -8,6 +8,26 @@
 All notable changes to Group Manager are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed
+- **Opening any group's detail view (local or LDAP) returned HTTP 500 on
+  Nextcloud 31** as soon as the Team Folders app (`groupfolders` 19.x) was
+  installed, because `GroupService::detail()` counts a group's folders on
+  every load. `FolderAssignmentService` called groupfolders' internal
+  `FolderManager` the way its 20+ releases expect — a required storage-id
+  argument dropped, folders read as `FolderWithMappingsAndCache` objects —
+  which groupfolders 19.x doesn't provide (it takes that argument and returns
+  plain arrays with different keys). Every result now goes through one
+  normalization step, and the one groupfolders method this app used that
+  doesn't exist before 20 (`mountPointExists()`) is replaced with a direct
+  query against its own table, mirroring how `folder_protection` already
+  reads groupfolders' schema instead of its unstable internal API.
+
+### Added
+- **Nextcloud 35 support**, verified against a disposable instance the same
+  way as 31–34.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added

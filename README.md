@@ -111,7 +111,7 @@ and regenerate the matching `l10n/<locale>.js` with `python3 build/l10n.py`.
 
 ## Requirements
 
-- Nextcloud 31–34
+- Nextcloud 31–35
 - PHP 8.1 or later
 - Optional: the **Team Folders** (`groupfolders`) app, for the Folders tab
 - Optional: **`user_ldap`**, for LDAP/AD group browsing

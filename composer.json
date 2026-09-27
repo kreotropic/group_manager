@@ -4,7 +4,8 @@
     "license": "AGPL-3.0-or-later",
     "require-dev": {
         "nextcloud/ocp": "^33.0",
-        "phpunit/phpunit": "^10.0"
+        "phpunit/phpunit": "^10.0",
+        "doctrine/dbal": "^4.5"
     },
     "scripts": {
         "test": "@php vendor/bin/phpunit -c phpunit.xml"

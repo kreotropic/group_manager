@@ -16,6 +16,12 @@ composer.json
 composer.lock
 js/*.map
 
+# Maintainer tooling: release notes, l10n.py, the per-version test instances
+# (build/nc-instance.sh, docker-compose.nc.yml, api-check.py). None of it is
+# needed to run the app. (This was already claimed by build/README.md before
+# this line existed — it wasn't actually excluded.)
+build
+
 # Tests & CI
 tests
 phpunit.xml
