@@ -53,8 +53,8 @@ script.
   satisfy every version.
 - **Points `user_ldap` at a test directory.** The `ldap` service is a public
   image pre-loaded with the Planet Express users and groups (`ship_crew`,
-  `admin_staff`, …), so the LDAP paths — read-only groups, the DN, expanding
-  an LDAP group into a local one — can be exercised without a directory of
+  `admin_staff`, …), so the LDAP paths (read-only groups, the DN, expanding
+  an LDAP group into a local one) can be exercised without a directory of
   your own. The API check relies on that data (`ship_crew` has three
   members).
 - **Widens the app's `info.xml` inside the container** when asked for a
@@ -71,7 +71,7 @@ script.
   `info.xml` on the host (a `git` checkout, merge or rebase, an editor's
   atomic save) silently detaches the widened copy from a running container.
 - **Runs `occ upgrade` when needed.** Every release bumps `<version>`, which
-  leaves an existing instance in "requires upgrade" — occ then refuses
+  leaves an existing instance in "requires upgrade"; occ then refuses
   everything but `upgrade`, `app:enable` included.
 
 ### What `test` covers
@@ -83,7 +83,7 @@ and LDAP groups, permissions, quota, the ACL flag), access control, and the
 admin page and its bundle. Every object it creates carries a per-run suffix
 and is removed at the end, so it can be re-run. Checks that cannot run
 because Team Folders is not enabled are reported as `SKIP` and do not fail
-the run; a failing group detail is a failure of its own, not a skip — this
+the run; a failing group detail is a failure of its own, not a skip: this
 is exactly the check that caught NC 31's original 500 (see the `Fixed` entry
 in `CHANGELOG.md`: `FolderAssignmentService` used to assume the `FolderManager`
 API that only groupfolders 20+ provides, so opening any group's detail view
@@ -104,11 +104,11 @@ Run on 2026-09-27 against the fix in `[Unreleased]`:
 | 34.0.4 | 8.5.10 | 22.0.6 | 58/58 | 48/48 |
 | 35.0.0 | 8.5.10 | 23.0.1 | 58/58 | 48/48 |
 
-Every instance ran PHP 8.3 or newer — that is all the images ship — so
+Every instance ran PHP 8.3 or newer (that is all the images ship), so
 nothing here says anything about PHP 8.1, which `info.xml` still declares as
 the minimum. Re-run the matrix whenever the declared range changes or a new
 Nextcloud is released. A real-browser check of the admin page's Members and
-Folders tabs exists only as a session scratchpad script, not in this repo —
+Folders tabs exists only as a session scratchpad script, not in this repo;
 worth bringing in properly if this matrix is kept up going forward.
 
 ## Releasing to the App Store
@@ -119,26 +119,26 @@ the certificate request PR against
 [nextcloud/app-certificate-requests](https://github.com/nextcloud/app-certificate-requests)
 is merged, as a file committed into that repository. That directory is the
 path `krankerl sign` looks in, which is why the key lives there rather than
-anywhere tidier. **The key is not backed up anywhere** — it signs every
+anywhere tidier. **The key is not backed up anywhere**: it signs every
 future release, and losing it means requesting a new certificate and
 disclosing the loss.
 
 ### 1. Pre-flight
 
-`krankerl package` archives the **committed** tree, not the working copy —
+`krankerl package` archives the **committed** tree, not the working copy:
 neither uncommitted edits to tracked files nor untracked files reach the
 tarball. That is a useful property (a release always corresponds to a commit)
 with one sharp edge: forget to commit and it silently packages the previous
 version. So commit first, then check `git status` is clean.
 
 Bump `version` in `appinfo/info.xml` (and `package.json`/`package-lock.json`,
-kept in step), and give the new version its own `CHANGELOG.md` section — the
+kept in step), and give the new version its own `CHANGELOG.md` section: the
 App Store reads the section matching the release version, so a heading that
 does not match ships an empty changelog.
 
 If the declared Nextcloud range changed, or a new Nextcloud or Team Folders
 release came out since the last release, re-run `build/nc-instance.sh test <version>`
-for each version first (see above) — the unit suite mocks Team Folders classes
+for each version first (see above): the unit suite mocks Team Folders classes
 and cannot catch a change in its actual API.
 
 ```bash
@@ -157,14 +157,14 @@ tar tzf build/artifacts/group_manager.tar.gz | wc -l
 tar xzf build/artifacts/group_manager.tar.gz -O group_manager/appinfo/info.xml | grep '<version>'
 ```
 
-Check the version inside the tarball rather than trusting the working copy —
+Check the version inside the tarball rather than trusting the working copy:
 it is the one place the "packages HEAD" behaviour shows up as a wrong answer.
 
 ### 3. Sign the packaged content, not the working tree
 
 **The trap worth knowing before you hit it:** running `integrity:sign-app`
-against `apps/group_manager` hashes the whole development directory —
-`src/`, `tests/`, `node_modules/`, `vendor/` — none of which ship. The
+against `apps/group_manager` hashes the whole development directory
+(`src/`, `tests/`, `node_modules/`, `vendor/`), none of which ship. The
 signature would then list files the installed app does not have, and
 `integrity:check-app` fails on every one. Sign an extracted copy of the
 tarball, so the hashes cover exactly the shipped file set.
@@ -213,12 +213,12 @@ First release only, two one-time steps before the upload:
    ```bash
    echo -n "group_manager" | openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key | openssl base64
    ```
-2. **Upload the release** — the form also asks for a signature, this time
+2. **Upload the release**: the form also asks for a signature, this time
    over the tarball's bytes, not the app id:
    ```bash
    openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key build/artifacts/group_manager-signed.tar.gz | openssl base64
    ```
-   This signature is only valid for the exact bytes uploaded — re-generating
+   This signature is only valid for the exact bytes uploaded; re-generating
    the tarball afterwards invalidates it.
 
 Upload `group_manager-signed.tar.gz` itself at
@@ -226,5 +226,5 @@ Upload `group_manager-signed.tar.gz` itself at
 from the `<screenshot>` URLs in `info.xml`, served from this repository's
 `raw.githubusercontent.com`, so they must already be pushed.
 
-For every release *after* the first, only step 2 (upload) repeats — the
+For every release *after* the first, only step 2 (upload) repeats; the
 account/certificate registration is one-time.

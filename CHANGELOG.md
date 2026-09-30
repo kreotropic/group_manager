@@ -15,8 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   Nextcloud 31** as soon as the Team Folders app (`groupfolders` 19.x) was
   installed, because `GroupService::detail()` counts a group's folders on
   every load. `FolderAssignmentService` called groupfolders' internal
-  `FolderManager` the way its 20+ releases expect — a required storage-id
-  argument dropped, folders read as `FolderWithMappingsAndCache` objects —
+  `FolderManager` the way its 20+ releases expect (a required storage-id
+  argument dropped, folders read as `FolderWithMappingsAndCache` objects),
   which groupfolders 19.x doesn't provide (it takes that argument and returns
   plain arrays with different keys). Every result now goes through one
   normalization step, and the one groupfolders method this app used that
@@ -32,8 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   race for removals made through this app; it can't coordinate an admin
   removed some other way (`occ`, the core Users page, another app).
 - **A group folder could be assigned, created, or have its permissions/quota
-  changed for a group ID that doesn't exist** — a typo, or a group deleted
-  between being picked and the request landing — leaving an association that
+  changed for a group ID that doesn't exist** (a typo, or a group deleted
+  between being picked and the request landing), leaving an association that
   silently grants full access the moment a group with that ID exists again
   (LDAP re-sync, or an admin recreating it). `FolderAssignmentService` now
   requires the group to exist before every such write. Unassigning is
@@ -42,13 +42,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   can still be removed.
 - **Pasting a list of users into "add members" showed a wrong count of new
   members** when the account belonged to the group but was outside the
-  currently loaded/filtered page — the frontend decided membership from
+  currently loaded/filtered page: the frontend decided membership from
   whatever page it had, not the group's real membership. `resolvePastedList`
   now reports each entry's real membership from the server. The "N members
   after applying" prediction also no longer uses the search-filtered member
   count as if it were the group's real size.
 - Going back or forward in the browser past a group with unapplied member or
-  folder changes used to discard them without asking — only switching groups
+  folder changes used to discard them without asking; only switching groups
   from the list itself was guarded. Back/Forward now asks the same question,
   and reverts the jump if declined; while a batch is actually being applied,
   navigating away (either way) is refused outright, not just guarded by a
@@ -64,11 +64,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   a follow-up refresh failing.
 - Group member pages could not be paged past the first one whenever the
   backend could enumerate members but couldn't answer a plain count
-  (`count()` returning `false`, seen with some LDAP setups) — the frontend
+  (`count()` returning `false`, seen with some LDAP setups): the frontend
   required a known total to show "Load more". Paging now uses a `hasMore`
   flag the API derives from an extra fetched row, independent of the total.
 - Creating a group whose ID contains `/` succeeded but left it permanently
-  unreachable through this app's own API (every route needs `/`-free IDs) —
+  unreachable through this app's own API (every route needs `/`-free IDs);
   rejected at creation now. A group with `/` in its ID created some other
   way (occ, LDAP) is unaffected and still manageable everywhere else.
 - Malformed input reached internal errors (HTTP 500) instead of a clean
@@ -77,20 +77,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   now validated up front with a stable error code.
 - **The add-members search for whole groups used to enumerate every member
   of the destination group, and every candidate group's own full
-  membership, on every keystroke** — a large directory made this measurably
+  membership, on every keystroke**: a large directory made this measurably
   slow. Membership is now checked one candidate at a time, up to
   a fixed page budget; a candidate group's entry shows its own size, not an
   exact "how many would be new" count (computed once, cheaply, only for the
   group actually picked). Opening a group's Folders tab, or counting its
   folders for the sidebar, no longer reads every group folder in the
-  instance to find the ones assigned to it — both now query the assignment
+  instance to find the ones assigned to it; both now query the assignment
   table directly for that group.
 
 ### Known limitations
 - The lock preventing the last-admin race, and the existence checks
   preventing orphaned folder associations, only coordinate operations made
   through this app. `occ`, the core Users settings page, or another app can
-  still race with — or bypass — either.
+  still race with, or bypass, either.
 - A folder-association row left over from before this release, or from a
   group deleted through some other route while this app was mid-request,
   isn't found or cleaned up automatically; only `unassignFolder()` can
@@ -99,7 +99,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   LDAP, another app) remains unreachable through this app's own group
   routes; only creating a *new* one that way is now rejected.
 - Group folders NOT yet assigned to a group (the assignment field's search)
-  are still found by reading every group folder in the instance — there's no
+  are still found by reading every group folder in the instance; there's no
   per-group index for "absent from this group's assignment list" the way
   there is for "assigned to it".
 - The groups list itself (left-hand panel) still loads every group and its
@@ -110,7 +110,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   AppFramework's own request dispatcher special-cases as of that version).
   The add-field's candidate search and the folder-assignment search still
   use a parameter literally named `limit` and are not worked around the same
-  way — an extreme, out-of-range value there can still surface as that
+  way: an extreme, out-of-range value there can still surface as that
   framework's own raw 500 on 34/35.
 
 ### Added
@@ -120,14 +120,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.0] - 2026-09-18
 
 ### Added
-- **Create group folders directly from a group's Folders tab** — a "Create
+- **Create group folders directly from a group's Folders tab**: a "Create
   group folder" button provisions a brand-new folder and assigns it to the
   current group in one step; Nextcloud asks for a password confirmation
   first, matching the bar the Team Folders app's own admin screen sets for
   the same operation.
 - **Automated test suite** (PHPUnit, `tests/Unit/`) and a CI workflow
   (`.github/workflows/ci.yml`: l10n coverage, PHP lint + tests, frontend
-  build) — closing the two top items from the Roadmap.
+  build), closing the two top items from the Roadmap.
 - Backend error messages (e.g. "Group not found") are now translated via
   `IL10N` into all five supported languages, instead of always showing in
   English regardless of the admin's own language.
@@ -140,7 +140,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   of always using a comma decimal separator.
 - Creating a group folder with an empty or slashes-only name used to
   silently create a folder mounted at the storage root instead of being
-  rejected — found while testing the creation feature above.
+  rejected; found while testing the creation feature above.
 
 ## [0.2.0] - 2026-09-18
 

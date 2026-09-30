@@ -6,11 +6,11 @@
 # Group Manager for Nextcloud
 
 **Browse every group, local or LDAP, and manage membership and group-folder
-access from one screen — no more one-user-at-a-time from the Users page.**
+access from one screen: no more one-user-at-a-time from the Users page.**
 
 Group Manager gives administrators a single admin-settings screen to browse
 all groups on the instance (local and LDAP/AD), inspect and bulk-edit local
-group membership, and — when the Team Folders app is installed — create or
+group membership, and, when the Team Folders app is installed, create or
 assign group folders and their per-group permissions and quota, without
 leaving Settings.
 
@@ -20,49 +20,49 @@ leaving Settings.
 
 Nextcloud's own Users page manages group membership from the *user's* side:
 open a person, tick the groups they belong to, one person at a time. There is
-no screen for the opposite, much more common admin task — *"open this group,
+no screen for the opposite, much more common admin task: *"open this group,
 see everyone in it, add or remove several people at once, and see which
-shared folders it can reach"* — short of `occ group:adduser`/`removeuser` one
+shared folders it can reach"*, short of `occ group:adduser`/`removeuser` one
 call per person, or juggling the Team Folders admin page separately. Group
 Manager is that screen.
 
 ## Features
 
-- **Browse all groups** — local and LDAP/AD side by side, searchable, with
+- **Browse all groups**: local and LDAP/AD side by side, searchable, with
   an All / Local / LDAP filter. LDAP groups sit under their own **Synced**
   heading. Two groups whose display name only differs by case (a common LDAP
   artifact) show their real ID so they stay distinguishable.
-- **Bulk membership editing** — one field adds a person, an entire group (all
+- **Bulk membership editing**: one field adds a person, an entire group (all
   of its members not already in this one, as a single queued action), or a
   pasted multi-line list of usernames/emails, resolved and reviewed before
   it's queued. Click the field to browse addable people alphabetically, or
   type to filter; tick several in one search without reopening it. Nothing is
-  applied until you hit **Apply** — a colored chip queue shows exactly what's
+  applied until you hit **Apply**: a colored chip queue shows exactly what's
   about to change, and a limited-concurrency batch applies it without
-  aborting the whole batch over one bad row (a deleted account, say) — that
+  aborting the whole batch over one bad row (a deleted account, say); that
   one row surfaces its error and **Try again** retries only what failed.
-- **Group-folder creation & assignment** (needs the **Team Folders** app) — a
+- **Group-folder creation & assignment** (needs the **Team Folders** app): a
   second tab lists the group folders this group can reach, with per-group
   **Write / Share / Delete** switches (read is always implied), the folder's
-  quota (editable — it belongs to the folder and is shared by every group
+  quota (editable: it belongs to the folder and is shared by every group
   with access, and the UI says so), and a badge when a folder has advanced
   permissions (ACL) turned on, since effective access can then be narrower
   than the switches show. A **Create group folder** button provisions a
-  brand-new folder and assigns it to the current group in one step —
+  brand-new folder and assigns it to the current group in one step;
   Nextcloud asks you to confirm your password first, since this creates real
-  storage. This works for LDAP groups too — group-folder assignment isn't
+  storage. This works for LDAP groups too: group-folder assignment isn't
   tied to how the group's *members* are managed, only membership is.
-- **LDAP groups are read-only where they have to be** — you can't add or
+- **LDAP groups are read-only where they have to be**: you can't add or
   remove an LDAP group's members here (that's the directory's job), and the
-  panel says so with the group's DN. Everything else — browsing, and folder
-  assignment — works the same as for a local group.
-- **Keyboard-friendly** — arrow keys and Enter drive the add-field dropdown,
+  panel says so with the group's DN. Everything else (browsing, and folder
+  assignment) works the same as for a local group.
+- **Keyboard-friendly**: arrow keys and Enter drive the add-field dropdown,
   Esc closes it, and switching to a different group while changes are still
   queued asks for confirmation first.
 
 ## Installation
 
-Group Manager is not yet on the App Store — install it from source:
+Group Manager is not yet on the App Store; install it from source:
 
 ```bash
 cd /path/to/nextcloud/apps
@@ -80,13 +80,13 @@ the right, each with its own add field and a shared **Discard**/**Apply**
 footer at the bottom of the panel.
 
 Creating and deleting *groups themselves* (as opposed to editing an existing
-one's membership) is also done from this screen — **Create group** at the
+one's membership) is also done from this screen: **Create group** at the
 bottom of the list, **Delete group** in a group's own header.
 
 ## Known Limitations
 
 - **The Folders tab only exists when the Team Folders app (`groupfolders`) is
-  installed and enabled.** No tab, no placeholder — the feature simply isn't
+  installed and enabled.** No tab, no placeholder: the feature simply isn't
   offered, since there is nothing to assign.
 - **LDAP group *membership* cannot be edited here, by design.** LDAP/AD is
   the source of truth for who belongs to a synced group; this app only lets
@@ -94,7 +94,7 @@ bottom of the list, **Delete group** in a group's own header.
   concept and stays editable.
 - **Quota is a folder property, not a per-group one.** Changing it from a
   group's Folders tab changes it for every other group that also has access
-  to that folder — the UI says this explicitly next to the field.
+  to that folder; the UI says this explicitly next to the field.
 
 ## Translations
 
@@ -106,7 +106,7 @@ The app interface is available in:
 - **Spanish** / Español
 - **French** / Français
 
-Contributions for additional languages are welcome — add a `l10n/<locale>.json`
+Contributions for additional languages are welcome: add a `l10n/<locale>.json`
 and regenerate the matching `l10n/<locale>.js` with `python3 build/l10n.py`.
 
 ## Requirements
@@ -125,7 +125,7 @@ and regenerate the matching `l10n/<locale>.js` with `python3 build/l10n.py`.
 The frontend is Vue 3 + `@nextcloud/vue`; the backend wraps
 `IGroupManager`/`IGroup`/`IUserManager` and, for the Folders tab, the Team
 Folders app's own `FolderManager` (resolved lazily, so this app has no hard
-dependency on it — the tab just doesn't render if it isn't installed). See
+dependency on it: the tab just doesn't render if it isn't installed). See
 the code under `lib/` and `src/`.
 
 ### Frontend build
