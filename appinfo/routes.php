@@ -14,6 +14,9 @@ declare(strict_types=1);
 // id can't contain a slash anyway).
 return [
     'routes' => [
+        ['name' => 'preferences#show', 'url' => '/api/preferences', 'verb' => 'GET'],
+        ['name' => 'preferences#setQuickAccess', 'url' => '/api/preferences/quick-access', 'verb' => 'PUT'],
+
         ['name' => 'group#index', 'url' => '/api/groups', 'verb' => 'GET'],
         ['name' => 'group#create', 'url' => '/api/groups', 'verb' => 'POST'],
         ['name' => 'group#candidates', 'url' => '/api/groups/{gid}/candidates', 'verb' => 'GET', 'requirements' => ['gid' => '[^/]+']],

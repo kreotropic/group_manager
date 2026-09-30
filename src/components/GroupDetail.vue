@@ -18,7 +18,13 @@
 					<div class="gm-detail__titles">
 						<h2 class="gm-detail__name">
 							<span class="gm-detail__name-text">{{ group.displayName }}</span>
+							<span v-if="group.backend !== 'local'"
+								class="gm-detail__badge"
+								:title="t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.')">
+								{{ t('group_manager', 'LDAP · read-only') }}
+							</span>
 							<NcButton v-if="group.canRename"
+								class="gm-detail__rename"
 								variant="tertiary"
 								:aria-label="t('group_manager', 'Rename group')"
 								:title="t('group_manager', 'Rename group')"
@@ -28,7 +34,19 @@
 								</template>
 							</NcButton>
 						</h2>
-						<p class="gm-detail__subtitle">{{ subtitleText }}</p>
+						<p v-if="subtitleText" class="gm-detail__subtitle">{{ subtitleText }}</p>
+						<p v-if="group.dn" class="gm-detail__dn">
+							<span class="gm-detail__dn-label">DN</span>
+							<code class="gm-detail__dn-value">{{ group.dn }}</code>
+							<NcButton variant="tertiary"
+								:aria-label="t('group_manager', 'Copy DN')"
+								:title="t('group_manager', 'Copy DN')"
+								@click="copyDn">
+								<template #icon>
+									<ContentCopy :size="16" />
+								</template>
+							</NcButton>
+						</p>
 					</div>
 
 					<button v-if="group.canDelete"
@@ -39,18 +57,12 @@
 					</button>
 				</header>
 
-				<NcNoteCard v-if="group.backend !== 'local'" type="info">
-					<p>{{ t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.') }}</p>
-					<p v-if="group.dn" class="gm-detail__dn">{{ group.dn }}</p>
-				</NcNoteCard>
-
 				<nav v-if="showTabs" class="gm-detail__tabs">
 					<button type="button"
 						class="gm-detail__tab"
 						:class="{ 'gm-detail__tab--active': activeTab === 'members' }"
 						@click="activeTab = 'members'">
 						<span class="gm-detail__tab-label">{{ t('group_manager', 'Members') }}</span>
-						<span class="gm-detail__tab-count">{{ group.memberCount }}</span>
 						<span v-if="showMembersDot" class="gm-detail__tab-dot" />
 					</button>
 					<button type="button"
@@ -58,7 +70,6 @@
 						:class="{ 'gm-detail__tab--active': activeTab === 'folders' }"
 						@click="activeTab = 'folders'">
 						<span class="gm-detail__tab-label">{{ t('group_manager', 'Folders') }}</span>
-						<span class="gm-detail__tab-count">{{ group.folderCount }}</span>
 						<span v-if="showFoldersDot" class="gm-detail__tab-dot" />
 					</button>
 				</nav>
@@ -69,7 +80,7 @@
 					v-show="!showTabs || activeTab === 'members'"
 					ref="membersManager"
 					:group-id="group.id"
-					:hide-title="showTabs"
+					:hide-title="true"
 					:total-member-count="group.memberCount"
 					class="gm-detail__tab-content"
 					@changed="onMembersChanged"
@@ -85,12 +96,12 @@
 					@pending-changed="onFoldersPendingChanged" />
 			</div>
 
-			<div v-if="showFooter" class="gm-detail-panel__footer" :class="{ 'gm-detail-panel__footer--disabled': !hasPendingChanges }">
+			<div v-if="showFooter" class="gm-detail-panel__footer">
 				<span class="gm-detail__footer-summary">{{ footerSummaryText }}</span>
-				<NcButton :disabled="!hasPendingChanges || applying" @click="discardAll">
+				<NcButton :disabled="applying" @click="discardAll">
 					{{ t('group_manager', 'Discard') }}
 				</NcButton>
-				<NcButton class="gm-detail__apply" variant="primary" :disabled="!hasPendingChanges || applying" @click="applyAll">
+				<NcButton class="gm-detail__apply" variant="primary" :disabled="applying" @click="applyAll">
 					<template v-if="applying" #icon>
 						<NcLoadingIcon :size="18" />
 					</template>
@@ -123,12 +134,14 @@
 
 <script>
 import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import { showSuccess, showError } from '@nextcloud/dialogs'
 import { confirmPassword } from '@nextcloud/password-confirmation'
 import '@nextcloud/password-confirmation/style.css'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
 import GroupMembersList from './GroupMembersList.vue'
@@ -147,6 +160,7 @@ export default {
 		NcDialog,
 		NcLoadingIcon,
 		NcNoteCard,
+		ContentCopy,
 		Pencil,
 		RenameGroupDialog,
 		GroupMembersList,
@@ -183,9 +197,11 @@ export default {
 			if (!this.group) {
 				return ''
 			}
-			const parts = [
-				this.group.backend === 'ldap' ? t('group_manager', 'LDAP group') : t('group_manager', 'Local group'),
-			]
+			// The counts live here, once; the tabs carry none.
+			const parts = []
+			if (this.group.backend === 'local') {
+				parts.push(t('group_manager', 'Local group'))
+			}
 			parts.push(this.group.memberCount
 				? n('group_manager', '%n member', '%n members', this.group.memberCount)
 				: t('group_manager', 'no members'))
@@ -216,14 +232,15 @@ export default {
 			return this.membersPending.hasPendingChanges || this.foldersPending.hasPendingChanges
 		},
 
+		// Only while there is something to apply or an apply is running:
+		// on a read-only group, or with nothing staged, the bar was just
+		// "No pending changes" plus two dead buttons.
 		showFooter() {
-			return this.showTabs || this.group?.canAddUser || this.group?.canRemoveUser
+			return (this.showTabs || this.group?.canAddUser || this.group?.canRemoveUser)
+				&& (this.hasPendingChanges || this.applying)
 		},
 
 		footerSummaryText() {
-			if (!this.hasPendingChanges) {
-				return t('group_manager', 'No pending changes')
-			}
 			if (!this.showTabs) {
 				const parts = []
 				if (this.membersPending.joining > 0) {
@@ -295,6 +312,15 @@ export default {
 				this.loadError = extractErrorMessage(err, t('group_manager', 'Could not load this group.'))
 			} finally {
 				this.loading = false
+			}
+		},
+
+		async copyDn() {
+			try {
+				await navigator.clipboard.writeText(this.group.dn)
+				showSuccess(t('group_manager', 'DN copied'))
+			} catch {
+				showError(t('group_manager', 'Could not copy the DN.'))
 			}
 		},
 
@@ -396,6 +422,7 @@ export default {
 
 <style scoped>
 .gm-detail-panel {
+	min-width: 0;
 	width: 100%;
 	height: 100%;
 	overflow: hidden;
@@ -413,20 +440,28 @@ export default {
 
 .gm-detail-panel__fixed {
 	flex-shrink: 0;
-	padding: 26px 0 20px;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	/* +1px: the list's rule is the top border of its scroll area, below its
+	   top region; this one is the last pixel of this box. */
+	height: calc(var(--gm-top-h) + 1px);
+	padding-top: 26px;
+	border-bottom: 1px solid var(--color-border);
 }
 
 .gm-detail-panel__body {
 	flex: 1;
 	min-height: 0;
+	min-width: 0;
 	display: flex;
+	padding-top: 20px;
 }
 
 .gm-detail__header {
 	display: flex;
-	align-items: center;
 	gap: 12px;
-	margin-bottom: 8px;
+	align-items: flex-start;
 }
 
 .gm-detail__titles {
@@ -437,11 +472,46 @@ export default {
 .gm-detail__name {
 	display: flex;
 	align-items: center;
+	min-height: 32px;
 	gap: 4px;
 	margin: 0;
 	font-size: 24px;
 	font-weight: 600;
 	text-align: left;
+	/* Nextcloud's own ".section h2" is inline-flex + justify-content:
+	   center, which centred the title over the left-aligned rest. */
+	justify-content: flex-start;
+	max-width: none;
+}
+
+.gm-detail__rename {
+	/* The default 44px tap target towered over the 24px title and looked
+	   detached; revealed on hover/focus, always shown where there is no hover. */
+	--default-clickable-area: 32px;
+	opacity: 0;
+}
+
+.gm-detail__name:hover .gm-detail__rename,
+.gm-detail__name:focus-within .gm-detail__rename {
+	opacity: 1;
+}
+
+@media (hover: none) {
+	.gm-detail__rename {
+		opacity: 1;
+	}
+}
+
+.gm-detail__badge {
+	flex-shrink: 0;
+	margin-left: 8px;
+	padding: 2px 10px;
+	border: 1px solid var(--color-border-maxcontrast);
+	border-radius: var(--border-radius-pill);
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
 }
 
 .gm-detail__name-text {
@@ -458,7 +528,12 @@ export default {
 
 .gm-detail__delete {
 	flex-shrink: 0;
-	padding: 4px 2px;
+	/* Same 32px as the title row, so it centres on the title itself and not
+	   on the title plus its metadata. */
+	display: flex;
+	align-items: center;
+	height: 32px;
+	padding: 0 2px;
 	border: none;
 	background: transparent;
 	color: var(--color-text-maxcontrast);
@@ -472,19 +547,35 @@ export default {
 }
 
 .gm-detail__dn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 2px 0 0;
+	font-size: 12px;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-detail__dn-label {
+	font-weight: 700;
+	letter-spacing: .07em;
+}
+
+.gm-detail__dn-value {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-family: monospace;
-	font-size: 13px;
-	word-break: break-all;
 }
 
 .gm-detail__tabs {
 	display: flex;
 	gap: 22px;
-	margin-top: 12px;
-	border-bottom: 1px solid var(--color-border);
+	margin-top: auto;
 }
 
-.gm-detail__tab {
+.gm-detail__tabs .gm-detail__tab {
+	margin: 0;
 	display: flex;
 	align-items: baseline;
 	gap: 6px;
@@ -495,11 +586,12 @@ export default {
 	background: transparent;
 	color: var(--color-text-maxcontrast);
 	font-size: 14px;
+	font-weight: 600;
 	font-family: inherit;
 	cursor: pointer;
 }
 
-.gm-detail__tab--active {
+.gm-detail__tabs .gm-detail__tab--active {
 	margin-bottom: -1px;
 	border-bottom-color: var(--color-primary-element);
 	color: var(--color-main-text);
@@ -509,12 +601,6 @@ export default {
 .gm-detail__tab-label {
 	padding-bottom: 0;
 	border-bottom: none;
-}
-
-.gm-detail__tab-count {
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-	font-variant-numeric: tabular-nums;
 }
 
 .gm-detail__tab-dot {
@@ -539,10 +625,6 @@ export default {
 	padding: 10px 32px 14px;
 	border-top: 1px solid var(--color-border);
 	background: var(--color-background-hover);
-}
-
-.gm-detail-panel__footer--disabled {
-	color: var(--color-text-maxcontrast);
 }
 
 .gm-detail__footer-summary {

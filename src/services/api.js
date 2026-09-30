@@ -184,3 +184,16 @@ export async function setGroupFolderQuota(gid, folderId, quota) {
 	const { data } = await axios.put(base('/api/groups/' + encodeURIComponent(gid) + '/folders/' + folderId + '/quota'), { quota })
 	return data
 }
+
+/**
+ * Whether this admin has the top-bar shortcut enabled.
+ */
+export async function fetchQuickAccess() {
+	const { data } = await axios.get(base('/api/preferences'))
+	return data.quickAccess
+}
+
+export async function saveQuickAccess(enabled) {
+	const { data } = await axios.put(base('/api/preferences/quick-access'), { enabled })
+	return data.quickAccess
+}

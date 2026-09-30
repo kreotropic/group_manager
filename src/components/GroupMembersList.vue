@@ -5,14 +5,12 @@
 <template>
 	<div class="gm-members">
 		<div class="gm-members__scroll">
-			<div class="gm-members__header">
-				<h3 class="gm-members__title">
-					{{ t('group_manager', 'Members') }}
-					<span v-if="total !== null" class="gm-members__total">({{ total }})</span>
-				</h3>
+			<div v-if="showSearch" class="gm-members__header">
 				<NcTextField class="gm-members__search"
 					v-model="search"
 					:label="t('group_manager', 'Search members')"
+				:label-outside="true"
+				:placeholder="t('group_manager', 'Search members')"
 					:show-trailing-button="search.length > 0"
 					@update:model-value="onSearchInput"
 					@trailing-button-click="search = ''">
@@ -39,16 +37,12 @@
 
 			<ul v-else class="gm-members__grid">
 				<li v-for="member in members" :key="member.uid" class="gm-members__item">
-					<NcAvatar :user="member.uid"
-						:display-name="member.displayName"
-						:size="26"
-						:disable-menu="true"
-						:disable-tooltip="true"
-						class="gm-members__item-avatar" />
-					<span class="gm-members__item-name">{{ member.displayName }}</span>
+					<MemberAvatar :uid="member.uid" :name="member.displayName" :size="28" class="gm-members__item-avatar" />
+					<span class="gm-members__item-text">
+						<span class="gm-members__item-name">{{ member.displayName }}</span>
+						<span v-if="detailLine(member)" class="gm-members__item-uid">{{ detailLine(member) }}</span>
+					</span>
 					<span v-if="!member.enabled" class="gm-members__item-disabled">{{ t('group_manager', 'disabled') }}</span>
-					<span v-else-if="member.email" class="gm-members__item-email">{{ member.email }}</span>
-					<span v-else class="gm-members__item-email">{{ member.uid }}</span>
 				</li>
 			</ul>
 
@@ -71,28 +65,30 @@
 
 <script>
 import { translate as t } from '@nextcloud/l10n'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import MemberAvatar from './MemberAvatar.vue'
+import { memberDetailLine } from '../utils/members.js'
 import Magnify from 'vue-material-design-icons/Magnify.vue'
 import { fetchGroupMembers } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
 const PAGE_SIZE = 50
 const SEARCH_DEBOUNCE_MS = 300
+const SEARCH_MIN_MEMBERS = 10
 
 export default {
 	name: 'GroupMembersList',
 
 	components: {
-		NcAvatar,
 		NcButton,
 		NcLoadingIcon,
 		NcNoteCard,
 		NcTextField,
 		Magnify,
+		MemberAvatar,
 	},
 
 	props: {
@@ -134,6 +130,14 @@ export default {
 		}
 	},
 
+	computed: {
+		// A filter box on a handful of rows is noise; it stays visible
+		// while a term is typed so the list can always be un-filtered.
+		showSearch() {
+			return this.search !== '' || (this.total ?? this.members.length) >= SEARCH_MIN_MEMBERS
+		},
+	},
+
 	watch: {
 		groupId() {
 			this.search = ''
@@ -152,6 +156,7 @@ export default {
 
 	methods: {
 		t,
+		detailLine: memberDetailLine,
 
 		onSearchInput() {
 			// Invalidates anything already in flight right away, before the
@@ -246,6 +251,7 @@ export default {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	scrollbar-width: thin;
 	padding-bottom: 8px;
 }
 
@@ -257,18 +263,9 @@ export default {
 	margin-bottom: 12px;
 }
 
-.gm-members__title {
-	margin: 0;
-	font-size: 16px;
-}
-
-.gm-members__total {
-	color: var(--color-text-maxcontrast);
-	font-weight: normal;
-}
-
 .gm-members__search {
-	max-width: 220px;
+	max-width: 320px;
+	margin: 0 !important;
 }
 
 .gm-members__loading {
@@ -297,7 +294,7 @@ export default {
 .gm-members__grid {
 	display: flex;
 	flex-direction: column;
-	max-width: 560px;
+	max-width: 720px;
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -316,9 +313,22 @@ export default {
 	flex-shrink: 0;
 }
 
+.gm-members__item-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gm-members__item-uid {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+}
+
 .gm-members__item-name {
-	flex-shrink: 0;
-	max-width: 45%;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -326,7 +336,7 @@ export default {
 }
 
 .gm-members__item-email {
-	flex: 1;
+	flex: 0 1 45%;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -337,8 +347,7 @@ export default {
 }
 
 .gm-members__item-disabled {
-	flex: 1;
-	min-width: 0;
+	flex: 0 0 auto;
 	text-align: right;
 	color: var(--color-text-maxcontrast);
 	font-style: italic;

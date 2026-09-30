@@ -4,10 +4,6 @@
   -->
 <template>
 	<div class="gm-app">
-		<div class="gm-header">
-			<h2>{{ t('group_manager', 'Group Manager') }}</h2>
-		</div>
-
 		<NcNoteCard v-if="loadError" type="error">
 			{{ loadError }}
 		</NcNoteCard>
@@ -16,6 +12,8 @@
 			<GroupList :groups="groups"
 				:loading="loading"
 				:selected-id="selectedId"
+				:quick-access="quickAccess"
+				@toggle-quick-access="toggleQuickAccess"
 				@select="selectGroup"
 				@create="showCreateDialog = true" />
 
@@ -47,14 +45,14 @@
 
 <script>
 import { translate as t } from '@nextcloud/l10n'
-import { showSuccess } from '@nextcloud/dialogs'
+import { showSuccess, showError } from '@nextcloud/dialogs'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import AccountMultiple from 'vue-material-design-icons/AccountMultiple.vue'
 import GroupList from './components/GroupList.vue'
 import GroupDetail from './components/GroupDetail.vue'
 import CreateGroupDialog from './components/CreateGroupDialog.vue'
-import { fetchGroups } from './services/api.js'
+import { fetchGroups, fetchQuickAccess, saveQuickAccess } from './services/api.js'
 import { extractErrorMessage } from './utils/errors.js'
 import { readGroupIdFromHash, pushGroupHash } from './utils/hash.js'
 
@@ -94,6 +92,7 @@ export default {
 			// instead of being re-processed as a new user navigation.
 			suppressNextPopState: false,
 			announcement: '',
+			quickAccess: false,
 		}
 	},
 
@@ -101,6 +100,7 @@ export default {
 		window.addEventListener('popstate', this.onPopState)
 		window.addEventListener('beforeunload', this.onBeforeUnload)
 
+		fetchQuickAccess().then((v) => { this.quickAccess = v }).catch(() => {})
 		await this.loadGroups()
 
 		// Deep-link support: #group=<gid>, only honoured if that group still exists.
@@ -133,6 +133,18 @@ export default {
 		 */
 		sortGroups(groups) {
 			return [...groups].sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }))
+		},
+
+		async toggleQuickAccess() {
+			const next = !this.quickAccess
+			try {
+				this.quickAccess = await saveQuickAccess(next)
+				showSuccess(this.quickAccess
+					? t('group_manager', 'Top bar shortcut enabled. Reload the page to see it.')
+					: t('group_manager', 'Top bar shortcut disabled. Reload the page to update the bar.'))
+			} catch (err) {
+				showError(extractErrorMessage(err, t('group_manager', 'Could not save the preference.')))
+			}
 		},
 
 		async loadGroups() {
@@ -284,13 +296,13 @@ export default {
 	max-width: 100%;
 }
 
-.gm-header {
-	margin-bottom: 16px;
-}
-
 .gm-layout {
+	/* Height of the top region of BOTH columns (title, search/subtitle,
+	   tabs). Sharing one value keeps the rule under the tabs a single
+	   continuous line across the list and the detail panel. */
+	--gm-top-h: 156px;
 	display: flex;
-	height: calc(100vh - 170px);
+	height: calc(100vh - 130px);
 	min-height: 480px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-large);
@@ -300,6 +312,7 @@ export default {
 
 .gm-detail {
 	flex: 1;
+	min-width: 0;
 	display: flex;
 	overflow: hidden;
 }

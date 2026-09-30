@@ -13,14 +13,14 @@
 				<span v-else-if="hasPendingChanges" class="gm-mm__count">{{ afterApplyingText }}</span>
 
 				<div ref="addWrapper" class="gm-mm__add" :class="{ 'gm-mm__add--open': showDropdown }">
-					<Plus :size="18" class="gm-mm__add-icon" />
+					<AccountOutline :size="18" class="gm-mm__add-icon" />
 					<input ref="addInput"
 						v-model="addQuery"
 						type="text"
 						class="gm-mm__add-input"
 						:disabled="applying"
-						:placeholder="t('group_manager', 'Add a person, a whole group, or paste a list…')"
-						:aria-label="t('group_manager', 'Add a person, a whole group, or paste a list')"
+						:placeholder="t('group_manager', 'Add people or groups…')"
+						:aria-label="t('group_manager', 'Add people or groups')"
 						@input="onAddInput"
 						@paste="onAddPaste"
 						@focus="onAddFocus"
@@ -30,6 +30,9 @@
 						@keydown.esc="closeDropdown">
 
 					<ul v-if="showDropdown" class="gm-mm__add-dropdown" role="listbox">
+						<li class="gm-mm__add-hint">
+							{{ t('group_manager', 'You can also paste a list of names to add several at once') }}
+						</li>
 						<li v-if="addSearching" class="gm-mm__add-status">
 							<NcLoadingIcon :size="16" />
 							{{ t('group_manager', 'Searching…') }}
@@ -72,9 +75,12 @@
 					</ul>
 				</div>
 
-				<NcTextField class="gm-mm__search"
+				<NcTextField v-if="showFilter"
+					class="gm-mm__search"
 					v-model="memberSearch"
 					:label="t('group_manager', 'Filter members')"
+				:label-outside="true"
+				:placeholder="t('group_manager', 'Filter members')"
 					:show-trailing-button="memberSearch.length > 0"
 					@update:model-value="onMemberSearchInput"
 					@trailing-button-click="memberSearch = ''">
@@ -148,40 +154,30 @@
 			</p>
 
 			<div v-else class="gm-mm__table" role="table">
-				<div class="gm-mm__row gm-mm__row--head" role="row">
-					<span class="gm-mm__col-member" role="columnheader">{{ t('group_manager', 'Member') }}</span>
-					<span class="gm-mm__col-account" role="columnheader">{{ t('group_manager', 'Account') }}</span>
-					<span class="gm-mm__col-spacer" role="columnheader" />
-				</div>
 				<div v-for="member in members"
 					:key="member.uid"
 					class="gm-mm__row"
 					role="row"
 					:class="{ 'gm-mm__row--leaving': isPendingRemove(member.uid) }">
 					<span class="gm-mm__col-member" role="cell">
-						<NcAvatar :user="member.uid"
-							:display-name="member.displayName"
-							:size="26"
-							:disable-menu="true"
-							:disable-tooltip="true"
-							class="gm-mm__row-avatar" />
-						<span class="gm-mm__row-name">{{ member.displayName }}</span>
+						<MemberAvatar :uid="member.uid" :name="member.displayName" :size="28" class="gm-mm__row-avatar" />
+						<span class="gm-mm__row-text">
+							<span class="gm-mm__row-name">{{ member.displayName }}</span>
+							<span v-if="memberDetailLine(member)" class="gm-mm__row-uid">{{ memberDetailLine(member) }}</span>
+						</span>
 					</span>
-					<span class="gm-mm__col-account" role="cell">
-						<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
-							{{ t('group_manager', 'leaving') }}
-						</span>
-						<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
-							{{ t('group_manager', 'disabled') }}
-						</span>
-						<span v-else-if="member.email" class="gm-mm__row-email">{{ member.email }}</span>
-						<span v-else class="gm-mm__row-email">{{ member.uid }}</span>
+					<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
+						{{ t('group_manager', 'leaving') }}
+					</span>
+					<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
+						{{ t('group_manager', 'disabled') }}
 					</span>
 					<span class="gm-mm__col-spacer" role="cell">
 						<button v-if="!isPendingRemove(member.uid)"
 							type="button"
 							class="gm-mm__row-remove"
 							:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
+							:title="t('group_manager', 'Remove from group')"
 							:disabled="applying"
 							@click="markForRemoval(member)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
 					</span>
@@ -225,7 +221,6 @@ import { translate as t } from '@nextcloud/l10n'
 import { showInfo } from '@nextcloud/dialogs'
 import { confirmPassword } from '@nextcloud/password-confirmation'
 import '@nextcloud/password-confirmation/style.css'
-import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
@@ -235,7 +230,6 @@ import AccountOutline from 'vue-material-design-icons/AccountOutline.vue'
 import AlertCircle from 'vue-material-design-icons/AlertCircle.vue'
 import CheckCircle from 'vue-material-design-icons/CheckCircle.vue'
 import Magnify from 'vue-material-design-icons/Magnify.vue'
-import Plus from 'vue-material-design-icons/Plus.vue'
 import {
 	fetchGroupMembers,
 	searchGroupCandidates,
@@ -244,6 +238,8 @@ import {
 	addGroupMember,
 	removeGroupMember,
 } from '../services/api.js'
+import MemberAvatar from './MemberAvatar.vue'
+import { memberDetailLine } from '../utils/members.js'
 import { extractErrorMessage } from '../utils/errors.js'
 import { runWithConcurrency } from '../utils/concurrency.js'
 
@@ -255,7 +251,6 @@ export default {
 	name: 'GroupMembersManager',
 
 	components: {
-		NcAvatar,
 		NcButton,
 		NcLoadingIcon,
 		NcNoteCard,
@@ -265,7 +260,7 @@ export default {
 		AlertCircle,
 		CheckCircle,
 		Magnify,
-		Plus,
+		MemberAvatar,
 	},
 
 	props: {
@@ -432,6 +427,12 @@ export default {
 			return this.memberSearch === '' ? this.total : null
 		},
 
+		// Same threshold as GroupMembersList: no filter box for a short list,
+		// but keep it while a term is typed so the list can be un-filtered.
+		showFilter() {
+			return this.memberSearch !== '' || (this.totalMemberCount ?? this.total ?? 0) >= 10
+		},
+
 		headerCountText() {
 			if (!this.hasPendingChanges) {
 				// v-if="total !== null" in the template used to gate this whole
@@ -515,6 +516,7 @@ export default {
 	},
 
 	methods: {
+		memberDetailLine,
 		t,
 
 		emitPendingChanged(hasPendingChanges) {
@@ -959,6 +961,7 @@ export default {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	scrollbar-width: thin;
 	padding-bottom: 8px;
 }
 
@@ -989,7 +992,8 @@ export default {
 	   redefining it (rather than forcing height on each part separately)
 	   keeps them all correctly centered together at the taller size. */
 	--default-clickable-area: 42px;
-	flex: 1 1 0;
+	/* The secondary action: narrower than the add field and pushed right. */
+	flex: 0 0 240px;
 	min-width: 0;
 	/* Its root also carries a 6px top margin (meant for stacking under a
 	   label in a form) — asymmetric margin skews flex centering. */
@@ -1001,28 +1005,34 @@ export default {
 	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 0;
 	flex: 1 1 0;
 	min-width: 0;
-	height: 42px;
-	padding: 0 12px;
-	border: 1px solid var(--color-border-dark);
+	height: 40px;
+	padding: 0 12px 0 0;
+	/* Same outline (a box-shadow pair, not a border), height and
+	   icon-to-text distance as NcTextField, so this field and the filter
+	   beside it read as one family. */
+	border: none;
+	box-shadow: 0 -1px 0 0 var(--color-border-maxcontrast), 0 0 0 1px color-mix(in srgb, var(--color-border-maxcontrast) 35%, transparent);
 	border-radius: var(--border-radius-large);
 	background: var(--color-main-background);
 }
 
 .gm-mm__add--open {
-	border-color: var(--color-primary-element);
+	box-shadow: 0 0 0 2px var(--color-primary-element);
 }
 
 .gm-mm__add-icon {
 	flex-shrink: 0;
+	margin: 0 12px;
 	color: var(--color-text-maxcontrast);
 }
 
 .gm-mm__add-input {
 	flex: 1;
 	min-width: 0;
+	padding: 0;
 	height: 100%;
 	border: none;
 	outline: none;
@@ -1040,6 +1050,7 @@ export default {
 	right: 0;
 	max-height: 280px;
 	overflow-y: auto;
+	scrollbar-width: thin;
 	margin: 0;
 	padding: 4px;
 	list-style: none;
@@ -1106,7 +1117,7 @@ export default {
 }
 
 .gm-mm__add-hint {
-	padding: 6px 10px 2px;
+	padding: 6px 10px 6px;
 	color: var(--color-text-maxcontrast);
 	font-size: 12px;
 	font-style: italic;
@@ -1204,6 +1215,7 @@ export default {
 	gap: 2px;
 	max-height: 120px;
 	overflow-y: auto;
+	scrollbar-width: thin;
 }
 
 .gm-mm__paste-review-item {
@@ -1262,47 +1274,20 @@ export default {
 .gm-mm__row {
 	display: flex;
 	align-items: center;
-	height: 44px;
+	height: 52px;
 	border-top: 1px solid var(--color-border);
 }
 
-.gm-mm__row--head {
-	height: auto;
-	padding-bottom: 6px;
-	border-top: none;
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: .07em;
-	color: var(--color-text-maxcontrast);
-}
-
-/* Zebra striping — the header (first child) is excluded, so the first data
-   row lands on :nth-child(even); which parity that is doesn't matter, only
-   that alternate rows differ. */
-.gm-mm__row:not(.gm-mm__row--head):nth-child(even) {
+.gm-mm__row:hover {
 	background: var(--color-background-hover);
-}
-
-.gm-mm__row:not(.gm-mm__row--head):hover {
-	background: var(--color-background-dark);
 }
 
 .gm-mm__col-member {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	flex: 1 1 55%;
+	flex: 1 1 auto;
 	min-width: 0;
-}
-
-.gm-mm__col-account {
-	flex: 1 1 35%;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 13px;
 }
 
 .gm-mm__col-spacer {
@@ -1313,6 +1298,20 @@ export default {
 
 .gm-mm__row-avatar {
 	flex-shrink: 0;
+}
+
+.gm-mm__row-text {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.gm-mm__row-uid {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--color-text-maxcontrast);
 }
 
 .gm-mm__row-name {
@@ -1327,8 +1326,11 @@ export default {
 	color: var(--color-text-maxcontrast);
 }
 
-.gm-mm__row-email {
-	color: var(--color-text-maxcontrast);
+.gm-mm__row-disabled-label,
+.gm-mm__row-leaving-label {
+	flex-shrink: 0;
+	margin-right: 8px;
+	font-size: 12px;
 }
 
 .gm-mm__row-disabled-label {
@@ -1361,6 +1363,24 @@ export default {
 
 .gm-mm__row-remove svg {
 	display: block;
+}
+
+/* Only on the hovered/focused row: six always-visible crosses weigh as much
+   as the names. Kept reachable by keyboard (focus-within) and on touch
+   screens, which have no hover. */
+.gm-mm__row-remove {
+	opacity: 0;
+}
+
+.gm-mm__row:hover .gm-mm__row-remove,
+.gm-mm__row:focus-within .gm-mm__row-remove {
+	opacity: 1;
+}
+
+@media (hover: none) {
+	.gm-mm__row-remove {
+		opacity: 1;
+	}
 }
 
 .gm-mm__row-remove:hover,

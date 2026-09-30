@@ -845,6 +845,7 @@ export default {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	scrollbar-width: thin;
 	padding-bottom: 8px;
 }
 
@@ -900,6 +901,7 @@ export default {
 	right: 0;
 	max-height: 280px;
 	overflow-y: auto;
+	scrollbar-width: thin;
 	margin: 0;
 	padding: 4px;
 	list-style: none;
