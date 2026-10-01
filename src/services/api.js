@@ -67,12 +67,12 @@ export async function deleteGroup(gid) {
 
 /**
  * Search users AND groups not already fully represented in the group, for
- * the single add field. Returns { users: [...], groups: [...] } — group
+ * the single add field. Returns { users, groups, nextOffset, hasMore } — group
  * entries carry newMemberCount (how many new people picking them would add).
  */
-export async function searchGroupCandidates(gid, search, limit = 10) {
+export async function searchGroupCandidates(gid, search, limit = 10, offset = 0) {
 	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/candidates'), {
-		params: { search, limit },
+		params: { search, limit, offset },
 	})
 	return data
 }

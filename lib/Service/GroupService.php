@@ -127,19 +127,33 @@ class GroupService {
      * no longer a filter: an admin typing a search sees every matching
      * group, same as for users.
      *
-     * @return array{users: list<array{uid: string, displayName: string}>, groups: list<array{id: string, displayName: string, backend: string, memberCount: ?int}>}
+     * Paged: $offset is the cursor a previous call returned as `nextOffset`
+     * (a position in the raw user search, not a count of results, since
+     * existing members are skipped along the way). `hasMore` is false only
+     * once the search itself ran out, so the dropdown can keep loading as it
+     * is scrolled instead of stopping at the first $limit people.
+     *
+     * @return array{users: list<array{uid: string, displayName: string}>, groups: list<array{id: string, displayName: string, backend: string, memberCount: ?int}>, nextOffset: int, hasMore: bool}
      */
-    public function searchCandidates(string $gid, string $search, int $limit = 10): array {
+    public function searchCandidates(string $gid, string $search, int $limit = 10, int $offset = 0): array {
         $group = $this->requireGroup($gid);
 
         $users = [];
-        $offset = 0;
+        $cursor = max(0, $offset);
+        $exhausted = false;
         for ($page = 0; $page < self::CANDIDATE_SEARCH_PAGE_BUDGET && count($users) < $limit; $page++) {
-            $candidates = $this->userManager->search($search, $limit, $offset);
+            // Browsing (no term) goes by display name, so paging through
+            // hundreds of people is alphabetical; IUserManager::search()
+            // would hand them back in backend/uid order.
+            $candidates = $search === ''
+                ? $this->userManager->searchDisplayName('', $limit, $cursor)
+                : $this->userManager->search($search, $limit, $cursor);
             if (count($candidates) === 0) {
+                $exhausted = true;
                 break;
             }
             foreach ($candidates as $user) {
+                $cursor++;
                 if ($group->inGroup($user)) {
                     continue;
                 }
@@ -148,15 +162,13 @@ class GroupService {
                     break;
                 }
             }
-            $offset += count($candidates);
         }
-        // IUserManager::search() doesn't guarantee display-name order (an
-        // empty $search — used to browse candidates before typing — comes
-        // back ordered by backend/uid instead), so sort explicitly.
         usort($users, static fn (array $a, array $b) => strnatcasecmp($a['displayName'], $b['displayName']));
 
         $groups = [];
-        if ($search !== '') {
+        // Groups are offered on the first page only; later pages just
+        // continue the user list.
+        if ($search !== '' && $offset === 0) {
             foreach ($this->groupManager->search($search, $limit) as $candidateGroup) {
                 if ($candidateGroup->getGID() === $gid) {
                     continue;
@@ -174,7 +186,7 @@ class GroupService {
             }
         }
 
-        return ['users' => $users, 'groups' => $groups];
+        return ['users' => $users, 'groups' => $groups, 'nextOffset' => $cursor, 'hasMore' => !$exhausted];
     }
 
     /**

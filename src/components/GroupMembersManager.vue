@@ -29,7 +29,7 @@
 						@keydown.enter.prevent="onAddEnter"
 						@keydown.esc="closeDropdown">
 
-					<ul v-if="showDropdown" class="gm-mm__add-dropdown" role="listbox">
+					<ul v-if="showDropdown" class="gm-mm__add-dropdown" ref="dropdown" role="listbox" @scroll.passive="onDropdownScroll">
 						<li class="gm-mm__add-hint">
 							{{ t('group_manager', 'You can also paste a list of names to add several at once') }}
 						</li>
@@ -70,6 +70,10 @@
 							</li>
 							<li v-if="flatOptions.some((o) => o.kind === 'user')" class="gm-mm__add-hint">
 								{{ t('group_manager', 'Pick as many as you need, then press Esc') }}
+							</li>
+							<li v-if="addLoadingMore" class="gm-mm__add-status">
+								<NcLoadingIcon :size="16" />
+								{{ t('group_manager', 'Loading more…') }}
 							</li>
 						</template>
 					</ul>
@@ -244,6 +248,7 @@ import { extractErrorMessage } from '../utils/errors.js'
 import { runWithConcurrency } from '../utils/concurrency.js'
 
 const PAGE_SIZE = 50
+const CANDIDATE_PAGE_SIZE = 30
 const SEARCH_DEBOUNCE_MS = 300
 const APPLY_CONCURRENCY = 4
 
@@ -313,6 +318,9 @@ export default {
 
 			addQuery: '',
 			addSearching: false,
+			addNextOffset: 0,
+			addHasMore: false,
+			addLoadingMore: false,
 			addResults: { users: [], groups: [] },
 			// '' (not shown), or the message from a failed candidate search --
 			// runAddSearch() used to let a rejected fetch leave addSearching=false
@@ -659,11 +667,15 @@ export default {
 			this.addSearchTimer = setTimeout(async () => {
 				const seq = ++this.addSearchSeq
 				try {
-					const results = await searchGroupCandidates(this.groupId, term, 10)
+					const results = await searchGroupCandidates(this.groupId, term, CANDIDATE_PAGE_SIZE, 0)
 					if (seq !== this.addSearchSeq) {
 						return
 					}
 					this.addResults = results
+					this.addNextOffset = results.nextOffset
+					this.addHasMore = results.hasMore
+					this.addLoadingMore = false
+					this.fillDropdown()
 				} catch (err) {
 					if (seq !== this.addSearchSeq) {
 						return
@@ -678,6 +690,67 @@ export default {
 					}
 				}
 			}, SEARCH_DEBOUNCE_MS)
+		},
+
+		/**
+		 * The candidate list is paged: scrolling near its end asks for the
+		 * next page of the same search, so an instance with hundreds of
+		 * users isn't limited to the first few the dropdown happened to load.
+		 */
+		onDropdownScroll(event) {
+			const el = event.target
+			if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) {
+				this.loadMoreCandidates()
+			}
+		},
+
+		/**
+		 * A page can come back short (existing members are skipped) and not
+		 * overflow the dropdown, leaving nothing to scroll and so nothing to
+		 * trigger the next page; keep going until it overflows or runs out.
+		 */
+		fillDropdown() {
+			this.$nextTick(() => {
+				const el = this.$refs.dropdown
+				if (el && this.addHasMore && el.scrollHeight <= el.clientHeight) {
+					// loadMoreCandidates() is still flagged as loading when this
+					// runs from its own finally-less success path, so release first.
+					this.addLoadingMore = false
+					this.loadMoreCandidates()
+				}
+			})
+		},
+
+		async loadMoreCandidates() {
+			if (!this.addHasMore || this.addLoadingMore || this.addSearching) {
+				return
+			}
+			// Same generation guard as runAddSearch(): a new term bumps
+			// addSearchSeq, which makes this page's answer stale.
+			const seq = this.addSearchSeq
+			this.addLoadingMore = true
+			try {
+				const results = await searchGroupCandidates(this.groupId, this.addQuery.trim(), CANDIDATE_PAGE_SIZE, this.addNextOffset)
+				if (seq !== this.addSearchSeq) {
+					return
+				}
+				const known = new Set(this.addResults.users.map((u) => u.uid))
+				this.addResults = {
+					...this.addResults,
+					users: this.addResults.users.concat(results.users.filter((u) => !known.has(u.uid))),
+				}
+				this.addNextOffset = results.nextOffset
+				this.addHasMore = results.hasMore
+				this.fillDropdown()
+			} catch (err) {
+				if (seq === this.addSearchSeq) {
+					this.addSearchError = extractErrorMessage(err, t('group_manager', 'Could not search.'))
+				}
+			} finally {
+				if (seq === this.addSearchSeq) {
+					this.addLoadingMore = false
+				}
+			}
 		},
 
 		/**

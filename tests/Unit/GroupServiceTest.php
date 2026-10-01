@@ -660,6 +660,55 @@ class GroupServiceTest extends TestCase {
         $this->assertCount(10, $result['users']);
     }
 
+    public function testSearchCandidatesPagesWithACursorAndReportsHasMore(): void {
+        $group = $this->group('finance', ['Database']);
+        $group->method('inGroup')->willReturn(false);
+        $this->groupManager->method('get')->with('finance')->willReturn($group);
+        $this->groupManager->method('search')->willReturn([]);
+
+        $calls = [];
+        $this->userManager->method('search')->willReturnCallback(function ($search, $limit, $offset) use (&$calls) {
+            $calls[] = $offset;
+            return array_map(function ($i) {
+                $user = $this->user('u' . $i);
+                $user->method('getDisplayName')->willReturn('U' . $i);
+                return $user;
+            }, range($offset, $offset + $limit - 1));
+        });
+
+        $first = $this->service->searchCandidates('finance', 'x', 5, 0);
+        $second = $this->service->searchCandidates('finance', 'x', 5, $first['nextOffset']);
+
+        $this->assertSame(5, $first['nextOffset']);
+        $this->assertTrue($first['hasMore']);
+        $this->assertSame(['u5', 'u6', 'u7', 'u8', 'u9'], array_map(fn ($u) => $u['uid'], $second['users']));
+        $this->assertSame(10, $second['nextOffset']);
+    }
+
+    public function testSearchCandidatesHasMoreIsFalseOnceTheSearchRunsOut(): void {
+        $group = $this->group('finance', ['Database']);
+        $group->method('inGroup')->willReturn(false);
+        $this->groupManager->method('get')->with('finance')->willReturn($group);
+        $this->groupManager->method('search')->willReturn([]);
+        $this->userManager->method('search')->willReturn([]);
+
+        $result = $this->service->searchCandidates('finance', 'x', 5, 40);
+
+        $this->assertFalse($result['hasMore']);
+        $this->assertSame(40, $result['nextOffset']);
+    }
+
+    public function testSearchCandidatesBrowsesByDisplayNameWhenNoTermIsGiven(): void {
+        $group = $this->group('finance', ['Database']);
+        $group->method('inGroup')->willReturn(false);
+        $this->groupManager->method('get')->with('finance')->willReturn($group);
+        $this->userManager->expects($this->never())->method('search');
+        $this->userManager->expects($this->atLeastOnce())->method('searchDisplayName')
+            ->willReturnCallback(fn ($search, $limit, $offset) => []);
+
+        $this->service->searchCandidates('finance', '', 10);
+    }
+
     public function testSearchCandidatesGroupsReportMemberCountNotOverlap(): void {
         $group = $this->group('finance', ['Database']);
         $this->groupManager->method('get')->with('finance')->willReturn($group);
@@ -709,7 +758,7 @@ class GroupServiceTest extends TestCase {
         // group only makes sense once the admin has named one.
         $group = $this->group('finance', ['Database']);
         $this->groupManager->method('get')->with('finance')->willReturn($group);
-        $this->userManager->method('search')->willReturn([]);
+        $this->userManager->method('searchDisplayName')->willReturn([]);
         $this->groupManager->expects($this->never())->method('search');
 
         $result = $this->service->searchCandidates('finance', '', 10);

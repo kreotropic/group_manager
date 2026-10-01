@@ -90,6 +90,7 @@ OC.L10N.register(
     "LDAP · read-only" : "LDAP · read-only",
     "Limit is out of range" : "Limit is out of range",
     "Load more" : "Load more",
+    "Loading more…" : "Loading more…",
     "Local" : "Local",
     "Local group" : "Local group",
     "Matched {matched} of {total}." : "Matched {matched} of {total}.",

@@ -89,6 +89,7 @@
         "LDAP · read-only": "LDAP · solo lectura",
         "Limit is out of range": "El límite está fuera del rango permitido",
         "Load more": "Cargar más",
+        "Loading more…": "Cargando más…",
         "Local": "Local",
         "Local group": "Grupo local",
         "Matched {matched} of {total}.": "{matched} de {total} coincidencias.",

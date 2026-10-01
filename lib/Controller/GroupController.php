@@ -57,8 +57,8 @@ class GroupController extends Controller {
         return $this->guarded(fn () => new DataResponse($this->groupService->getMembers($gid, $search, $pageSize, $offset)));
     }
 
-    public function candidates(string $gid, string $search = '', int $limit = 10): DataResponse {
-        return $this->guarded(fn () => new DataResponse($this->groupService->searchCandidates($gid, $search, $limit)));
+    public function candidates(string $gid, string $search = '', int $limit = 10, int $offset = 0): DataResponse {
+        return $this->guarded(fn () => new DataResponse($this->groupService->searchCandidates($gid, $search, $limit, $offset)));
     }
 
     public function expandGroup(string $gid, string $sourceGid): DataResponse {
