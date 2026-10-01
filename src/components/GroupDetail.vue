@@ -49,12 +49,14 @@
 						</p>
 					</div>
 
-					<button v-if="group.canDelete"
-						type="button"
-						class="gm-detail__delete"
-						@click="showDeleteDialog = true">
-						{{ t('group_manager', 'Delete group') }}
-					</button>
+					<NcActions v-if="group.canDelete" class="gm-detail__menu" :aria-label="t('group_manager', 'Group actions')">
+						<NcActionButton @click="showDeleteDialog = true">
+							<template #icon>
+								<TrashCanOutline :size="20" />
+							</template>
+							{{ t('group_manager', 'Delete group') }}
+						</NcActionButton>
+					</NcActions>
 				</header>
 
 				<nav v-if="showTabs" class="gm-detail__tabs">
@@ -137,11 +139,14 @@ import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showSuccess, showError } from '@nextcloud/dialogs'
 import { confirmPassword } from '@nextcloud/password-confirmation'
 import '@nextcloud/password-confirmation/style.css'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
+import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
 import GroupMembersList from './GroupMembersList.vue'
@@ -156,12 +161,15 @@ export default {
 	name: 'GroupDetail',
 
 	components: {
+		NcActionButton,
+		NcActions,
 		NcButton,
 		NcDialog,
 		NcLoadingIcon,
 		NcNoteCard,
 		ContentCopy,
 		Pencil,
+		TrashCanOutline,
 		RenameGroupDialog,
 		GroupMembersList,
 		GroupMembersManager,
@@ -526,24 +534,9 @@ export default {
 	color: var(--color-text-maxcontrast);
 }
 
-.gm-detail__delete {
+.gm-detail__menu {
 	flex-shrink: 0;
-	/* Same 32px as the title row, so it centres on the title itself and not
-	   on the title plus its metadata. */
-	display: flex;
-	align-items: center;
-	height: 32px;
-	padding: 0 2px;
-	border: none;
-	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 13px;
-	cursor: pointer;
-}
-
-.gm-detail__delete:hover {
-	color: var(--color-error-text);
-	text-decoration: underline;
+	--default-clickable-area: 32px;
 }
 
 .gm-detail__dn {

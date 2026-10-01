@@ -20,45 +20,47 @@
 				</NcTextField>
 			</div>
 
-			<NcNoteCard v-if="loadError" type="error" class="gm-members__error">
-				{{ loadError }}
-				<NcButton variant="secondary" @click="reload">
-					{{ t('group_manager', 'Try again') }}
+			<div class="gm-members__list">
+				<NcNoteCard v-if="loadError" type="error" class="gm-members__error">
+					{{ loadError }}
+					<NcButton variant="secondary" @click="reload">
+						{{ t('group_manager', 'Try again') }}
+					</NcButton>
+				</NcNoteCard>
+
+				<div v-else-if="loading && members.length === 0" class="gm-members__loading">
+					<NcLoadingIcon :size="24" />
+				</div>
+
+				<p v-else-if="members.length === 0" class="gm-members__empty">
+					{{ t('group_manager', 'No members found.') }}
+				</p>
+
+				<ul v-else class="gm-members__grid">
+					<li v-for="member in members" :key="member.uid" class="gm-members__item">
+						<MemberAvatar :uid="member.uid" :name="member.displayName" :size="28" class="gm-members__item-avatar" />
+						<span class="gm-members__item-text">
+							<span class="gm-members__item-name" :title="memberNameTitle(member)">{{ member.displayName }}</span>
+							<span v-if="detailLine(member)" class="gm-members__item-uid">{{ detailLine(member) }}</span>
+						</span>
+						<span v-if="!member.enabled" class="gm-members__item-disabled">{{ t('group_manager', 'disabled') }}</span>
+					</li>
+				</ul>
+
+				<p v-if="loadMoreError" class="gm-members__load-more-error">
+					{{ loadMoreError }}
+				</p>
+
+				<NcButton v-if="hasMore && !loadError"
+					class="gm-members__more"
+					:disabled="loadingMore"
+					@click="loadMore">
+					<template v-if="loadingMore" #icon>
+						<NcLoadingIcon :size="18" />
+					</template>
+					{{ t('group_manager', 'Load more') }}
 				</NcButton>
-			</NcNoteCard>
-
-			<div v-else-if="loading && members.length === 0" class="gm-members__loading">
-				<NcLoadingIcon :size="24" />
 			</div>
-
-			<p v-else-if="members.length === 0" class="gm-members__empty">
-				{{ t('group_manager', 'No members found.') }}
-			</p>
-
-			<ul v-else class="gm-members__grid">
-				<li v-for="member in members" :key="member.uid" class="gm-members__item">
-					<MemberAvatar :uid="member.uid" :name="member.displayName" :size="28" class="gm-members__item-avatar" />
-					<span class="gm-members__item-text">
-						<span class="gm-members__item-name">{{ member.displayName }}</span>
-						<span v-if="detailLine(member)" class="gm-members__item-uid">{{ detailLine(member) }}</span>
-					</span>
-					<span v-if="!member.enabled" class="gm-members__item-disabled">{{ t('group_manager', 'disabled') }}</span>
-				</li>
-			</ul>
-
-			<p v-if="loadMoreError" class="gm-members__load-more-error">
-				{{ loadMoreError }}
-			</p>
-
-			<NcButton v-if="hasMore && !loadError"
-				class="gm-members__more"
-				:disabled="loadingMore"
-				@click="loadMore">
-				<template v-if="loadingMore" #icon>
-					<NcLoadingIcon :size="18" />
-				</template>
-				{{ t('group_manager', 'Load more') }}
-			</NcButton>
 		</div>
 	</div>
 </template>
@@ -70,7 +72,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import MemberAvatar from './MemberAvatar.vue'
-import { memberDetailLine } from '../utils/members.js'
+import { memberDetailLine, memberNameTitle } from '../utils/members.js'
 import Magnify from 'vue-material-design-icons/Magnify.vue'
 import { fetchGroupMembers } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
@@ -157,6 +159,7 @@ export default {
 	methods: {
 		t,
 		detailLine: memberDetailLine,
+		memberNameTitle,
 
 		onSearchInput() {
 			// Invalidates anything already in flight right away, before the
@@ -250,8 +253,17 @@ export default {
 .gm-members__scroll {
 	flex: 1;
 	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Only the list scrolls; the search above it stays put. */
+.gm-members__list {
+	flex: 1;
+	min-height: 0;
 	overflow-y: auto;
 	scrollbar-width: thin;
+	scrollbar-gutter: stable;
 	padding-bottom: 8px;
 }
 

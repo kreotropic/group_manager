@@ -142,65 +142,67 @@
 				</div>
 			</div>
 
-			<NcNoteCard v-if="loadError" type="error" class="gm-mm__load-error">
-				{{ loadError }}
-				<NcButton variant="secondary" @click="reload">
-					{{ t('group_manager', 'Try again') }}
-				</NcButton>
-			</NcNoteCard>
+			<div class="gm-mm__list">
+				<NcNoteCard v-if="loadError" type="error" class="gm-mm__load-error">
+					{{ loadError }}
+					<NcButton variant="secondary" @click="reload">
+						{{ t('group_manager', 'Try again') }}
+					</NcButton>
+				</NcNoteCard>
 
-			<div v-else-if="loading && members.length === 0" class="gm-mm__loading">
-				<NcLoadingIcon :size="24" />
-			</div>
-
-			<p v-else-if="members.length === 0" class="gm-mm__empty">
-				{{ t('group_manager', 'This group has no members yet.') }}
-			</p>
-
-			<div v-else class="gm-mm__table" role="table">
-				<div v-for="member in members"
-					:key="member.uid"
-					class="gm-mm__row"
-					role="row"
-					:class="{ 'gm-mm__row--leaving': isPendingRemove(member.uid) }">
-					<span class="gm-mm__col-member" role="cell">
-						<MemberAvatar :uid="member.uid" :name="member.displayName" :size="28" class="gm-mm__row-avatar" />
-						<span class="gm-mm__row-text">
-							<span class="gm-mm__row-name">{{ member.displayName }}</span>
-							<span v-if="memberDetailLine(member)" class="gm-mm__row-uid">{{ memberDetailLine(member) }}</span>
-						</span>
-					</span>
-					<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
-						{{ t('group_manager', 'leaving') }}
-					</span>
-					<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
-						{{ t('group_manager', 'disabled') }}
-					</span>
-					<span class="gm-mm__col-spacer" role="cell">
-						<button v-if="!isPendingRemove(member.uid)"
-							type="button"
-							class="gm-mm__row-remove"
-							:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
-							:title="t('group_manager', 'Remove from group')"
-							:disabled="applying"
-							@click="markForRemoval(member)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
-					</span>
+				<div v-else-if="loading && members.length === 0" class="gm-mm__loading">
+					<NcLoadingIcon :size="24" />
 				</div>
+
+				<p v-else-if="members.length === 0" class="gm-mm__empty">
+					{{ t('group_manager', 'This group has no members yet.') }}
+				</p>
+
+				<div v-else class="gm-mm__table" role="table">
+					<div v-for="member in members"
+						:key="member.uid"
+						class="gm-mm__row"
+						role="row"
+						:class="{ 'gm-mm__row--leaving': isPendingRemove(member.uid) }">
+						<span class="gm-mm__col-member" role="cell">
+							<MemberAvatar :uid="member.uid" :name="member.displayName" :size="28" class="gm-mm__row-avatar" />
+							<span class="gm-mm__row-text">
+								<span class="gm-mm__row-name" :title="memberNameTitle(member)">{{ member.displayName }}</span>
+								<span v-if="memberDetailLine(member)" class="gm-mm__row-uid">{{ memberDetailLine(member) }}</span>
+							</span>
+						</span>
+						<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
+							{{ t('group_manager', 'leaving') }}
+						</span>
+						<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
+							{{ t('group_manager', 'disabled') }}
+						</span>
+						<span class="gm-mm__col-spacer" role="cell">
+							<button v-if="!isPendingRemove(member.uid)"
+								type="button"
+								class="gm-mm__row-remove"
+								:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
+								:title="t('group_manager', 'Remove from group')"
+								:disabled="applying"
+								@click="markForRemoval(member)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
+						</span>
+					</div>
+				</div>
+
+				<p v-if="loadMoreError" class="gm-mm__load-more-error">
+					{{ loadMoreError }}
+				</p>
+
+				<NcButton v-if="hasMore && !loadError"
+					class="gm-mm__more"
+					:disabled="applying || loadingMore"
+					@click="loadMore">
+					<template v-if="loadingMore" #icon>
+						<NcLoadingIcon :size="18" />
+					</template>
+					{{ t('group_manager', 'Load more') }}
+				</NcButton>
 			</div>
-
-			<p v-if="loadMoreError" class="gm-mm__load-more-error">
-				{{ loadMoreError }}
-			</p>
-
-			<NcButton v-if="hasMore && !loadError"
-				class="gm-mm__more"
-				:disabled="applying || loadingMore"
-				@click="loadMore">
-				<template v-if="loadingMore" #icon>
-					<NcLoadingIcon :size="18" />
-				</template>
-				{{ t('group_manager', 'Load more') }}
-			</NcButton>
 		</div>
 
 		<NcNoteCard v-if="lastResult" :type="lastResult.failed.length > 0 ? 'warning' : 'success'" class="gm-mm__result">
@@ -243,7 +245,7 @@ import {
 	removeGroupMember,
 } from '../services/api.js'
 import MemberAvatar from './MemberAvatar.vue'
-import { memberDetailLine } from '../utils/members.js'
+import { memberDetailLine, memberNameTitle } from '../utils/members.js'
 import { extractErrorMessage } from '../utils/errors.js'
 import { runWithConcurrency } from '../utils/concurrency.js'
 
@@ -525,6 +527,7 @@ export default {
 
 	methods: {
 		memberDetailLine,
+		memberNameTitle,
 		t,
 
 		emitPendingChanged(hasPendingChanges) {
@@ -1033,13 +1036,19 @@ export default {
 .gm-mm__scroll {
 	flex: 1;
 	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Only the member list scrolls; the add row, queue and paste review above
+   it stay put. */
+.gm-mm__list {
+	flex: 1;
+	min-height: 0;
 	overflow-y: auto;
 	scrollbar-width: thin;
-	/* Room for the add field's 1px outline (a box-shadow), which the
-	   overflow clip above otherwise cut at the corners; the negative margin
-	   gives that room back so nothing moves. */
-	margin: -3px -3px 0;
-	padding: 3px 3px 8px;
+	scrollbar-gutter: stable;
+	padding-bottom: 8px;
 }
 
 .gm-mm__header {
@@ -1065,10 +1074,6 @@ export default {
 }
 
 .gm-mm__search {
-	/* NcTextField sizes its wrapper, icon and label off this one variable —
-	   redefining it (rather than forcing height on each part separately)
-	   keeps them all correctly centered together at the taller size. */
-	--default-clickable-area: 42px;
 	/* The secondary action: narrower than the add field and pushed right. */
 	flex: 0 0 240px;
 	min-width: 0;
@@ -1085,7 +1090,8 @@ export default {
 	gap: 0;
 	flex: 1 1 0;
 	min-width: 0;
-	height: 40px;
+	/* NcTextField's visible box is 2px short of --default-clickable-area. */
+	height: calc(var(--default-clickable-area) - 2px);
 	padding: 0 12px 0 0;
 	/* Same outline (a box-shadow pair, not a border), height and
 	   icon-to-text distance as NcTextField, so this field and the filter

@@ -70,6 +70,7 @@ OC.L10N.register(
     "Group ID cannot contain \"/\"" : "L'identifiant du groupe ne peut pas contenir \"/\"",
     "Group ID cannot contain \"/\"." : "L'identifiant du groupe ne peut pas contenir \"/\".",
     "Group Manager" : "Gestionnaire de groupes",
+    "Group actions" : "Actions du groupe",
     "Group already has access to this folder" : "Le groupe a déjà accès à ce dossier",
     "Group creation is not supported by the backend" : "Le backend ne permet pas de créer des groupes",
     "Group does not have access to this folder" : "Le groupe n'a pas accès à ce dossier",

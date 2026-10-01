@@ -1287,7 +1287,7 @@ export default {
 	width: 13px;
 	height: 13px;
 	border-radius: 50%;
-	background: #fff;
+	background: var(--color-main-background);
 	transition: transform .1s ease-in-out;
 }
 

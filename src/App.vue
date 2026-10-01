@@ -304,15 +304,15 @@ export default {
 	display: flex;
 	height: calc(100vh - 130px);
 	min-height: 480px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-large);
 	overflow: hidden;
 	position: relative;
+	background: var(--color-main-background);
 }
 
 .gm-detail {
 	flex: 1;
 	min-width: 0;
+	background: var(--color-main-background);
 	display: flex;
 	overflow: hidden;
 }

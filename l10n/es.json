@@ -69,6 +69,7 @@
         "Group ID cannot contain \"/\"": "El ID del grupo no puede contener \"/\"",
         "Group ID cannot contain \"/\".": "El ID del grupo no puede contener \"/\".",
         "Group Manager": "Gestor de grupos",
+        "Group actions": "Acciones del grupo",
         "Group already has access to this folder": "El grupo ya tiene acceso a esta carpeta",
         "Group creation is not supported by the backend": "El backend no permite crear grupos",
         "Group does not have access to this folder": "El grupo no tiene acceso a esta carpeta",

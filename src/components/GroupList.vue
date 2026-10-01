@@ -282,7 +282,8 @@ export default {
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
-	border-right: 1px solid var(--color-border);
+	background: var(--color-main-background);
+	border-inline-end: 1px solid var(--color-border);
 }
 
 .gm-list__top {
@@ -318,7 +319,6 @@ export default {
 .gm-list__search {
 	padding: 0 20px;
 	margin: 12px 0 0 !important;
-	--default-clickable-area: 42px;
 }
 
 .gm-list__filters {
@@ -393,6 +393,7 @@ export default {
 
 .gm-list__row--active {
 	background: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
 }
 
 .gm-list__row-main {
@@ -411,7 +412,7 @@ export default {
 }
 
 .gm-list__row--active .gm-list__row-name {
-	font-weight: 600;
+	font-weight: bold;
 }
 
 .gm-list__row-gid {
@@ -419,7 +420,7 @@ export default {
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-family: monospace;
-	font-size: 11px;
+	font-size: 12px;
 	color: var(--color-text-maxcontrast);
 }
 
@@ -440,7 +441,7 @@ export default {
 }
 
 .gm-list__row-count--empty {
-	opacity: .55;
+	opacity: .7;
 }
 
 .gm-list__row-count {
