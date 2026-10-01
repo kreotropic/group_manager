@@ -962,7 +962,11 @@ export default {
 	min-height: 0;
 	overflow-y: auto;
 	scrollbar-width: thin;
-	padding-bottom: 8px;
+	/* Room for the add field's 1px outline (a box-shadow), which the
+	   overflow clip above otherwise cut at the corners; the negative margin
+	   gives that room back so nothing moves. */
+	margin: -3px -3px 0;
+	padding: 3px 3px 8px;
 }
 
 .gm-mm__header {
@@ -1269,13 +1273,21 @@ export default {
 .gm-mm__table {
 	display: flex;
 	flex-direction: column;
+	container-type: inline-size;
 }
+
 
 .gm-mm__row {
 	display: flex;
 	align-items: center;
-	height: 52px;
+	min-height: 44px;
 	border-top: 1px solid var(--color-border);
+}
+
+/* The add field already ends in a line of its own; a second one right under
+   it, from the first row, read as a double rule. */
+.gm-mm__row:first-child {
+	border-top: none;
 }
 
 .gm-mm__row:hover {
@@ -1301,12 +1313,16 @@ export default {
 }
 
 .gm-mm__row-text {
+	flex: 1;
 	min-width: 0;
 	display: flex;
-	flex-direction: column;
+	align-items: baseline;
+	gap: 8px;
 }
 
 .gm-mm__row-uid {
+	flex: 0 1 auto;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -1315,10 +1331,20 @@ export default {
 }
 
 .gm-mm__row-name {
+	flex-shrink: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: 14px;
+}
+
+/* Narrow panel: no room for name and details side by side, so they stack. */
+@container (max-width: 500px) {
+	.gm-mm__row-text {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0;
+	}
 }
 
 .gm-mm__row--leaving .gm-mm__row-name {

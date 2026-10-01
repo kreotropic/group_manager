@@ -295,6 +295,7 @@ export default {
 	display: flex;
 	flex-direction: column;
 	max-width: 720px;
+	container-type: inline-size;
 	list-style: none;
 	margin: 0;
 	padding: 0;
@@ -304,6 +305,7 @@ export default {
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	min-height: 44px;
 	padding: 6px 2px;
 	border-radius: var(--border-radius);
 	min-width: 0;
@@ -317,10 +319,21 @@ export default {
 	flex: 1;
 	min-width: 0;
 	display: flex;
-	flex-direction: column;
+	align-items: baseline;
+	gap: 8px;
+}
+
+@container (max-width: 500px) {
+	.gm-members__item-text {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0;
+	}
 }
 
 .gm-members__item-uid {
+	flex: 0 1 auto;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -329,6 +342,7 @@ export default {
 }
 
 .gm-members__item-name {
+	flex-shrink: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
