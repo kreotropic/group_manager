@@ -262,8 +262,8 @@ export default {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	scrollbar-width: thin;
 	scrollbar-gutter: stable;
+	margin-inline-end: calc(-1 * var(--gm-scrollbar-w, 12px));
 	padding-bottom: 8px;
 }
 

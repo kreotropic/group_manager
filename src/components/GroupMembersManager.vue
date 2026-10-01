@@ -1046,8 +1046,10 @@ export default {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	scrollbar-width: thin;
 	scrollbar-gutter: stable;
+	/* The reserved scrollbar lane is pushed out into the panel's own right
+	   padding, so the rows end exactly where the filter and the tab rule do. */
+	margin-inline-end: calc(-1 * var(--gm-scrollbar-w, 12px));
 	padding-bottom: 8px;
 }
 
@@ -1133,7 +1135,6 @@ export default {
 	right: 0;
 	max-height: 280px;
 	overflow-y: auto;
-	scrollbar-width: thin;
 	margin: 0;
 	padding: 4px;
 	list-style: none;
@@ -1298,7 +1299,6 @@ export default {
 	gap: 2px;
 	max-height: 120px;
 	overflow-y: auto;
-	scrollbar-width: thin;
 }
 
 .gm-mm__paste-review-item {

@@ -49,7 +49,10 @@
 						</p>
 					</div>
 
-					<NcActions v-if="group.canDelete" class="gm-detail__menu" :aria-label="t('group_manager', 'Group actions')">
+					<NcActions v-if="group.canDelete"
+						class="gm-detail__menu"
+						:force-menu="true"
+						:aria-label="t('group_manager', 'Group actions')">
 						<NcActionButton @click="showDeleteDialog = true">
 							<template #icon>
 								<TrashCanOutline :size="20" />
@@ -536,6 +539,9 @@ export default {
 
 .gm-detail__menu {
 	flex-shrink: 0;
+	/* The title row is 36px tall (24px type at 1.5), the button 32px: 2px
+	   puts the button's centre on the title's. */
+	margin-top: 2px;
 	--default-clickable-area: 32px;
 }
 

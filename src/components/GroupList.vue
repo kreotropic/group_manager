@@ -356,12 +356,18 @@ export default {
 	overflow-y: auto;
 	/* Thin bar without arrows; the gutter is reserved so the rows keep the
 	   same right margin whether or not the list scrolls. */
-	scrollbar-width: thin;
 	scrollbar-gutter: stable;
 	border-top: 1px solid var(--color-border);
 }
 
 .gm-list__section-header {
+	/* Sticks to the top once scrolled past and to the bottom while still
+	   below the fold, so a section further down is always labelled. */
+	position: sticky;
+	top: 0;
+	bottom: 0;
+	z-index: 1;
+	background: var(--color-main-background);
 	padding: 10px 20px 6px;
 	font-size: 11px;
 	font-weight: 700;
@@ -385,6 +391,20 @@ export default {
 	text-align: left;
 	font-family: inherit;
 	cursor: pointer;
+}
+
+/* The ring is for keyboard navigation only; a click must leave just the
+   active background. */
+.gm-list__row:focus:not(:focus-visible),
+.gm-list__filters .gm-list__filter:focus:not(:focus-visible) {
+	outline: none;
+	box-shadow: none;
+}
+
+.gm-list__row:focus-visible {
+	outline: 2px solid var(--color-main-text);
+	outline-offset: -2px;
+	box-shadow: none;
 }
 
 .gm-list__row:hover {

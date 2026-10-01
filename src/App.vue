@@ -97,6 +97,7 @@ export default {
 	},
 
 	async mounted() {
+		this.measureScrollbar()
 		window.addEventListener('popstate', this.onPopState)
 		window.addEventListener('beforeunload', this.onBeforeUnload)
 
@@ -117,6 +118,21 @@ export default {
 
 	methods: {
 		t,
+
+		/**
+		 * The member lists reserve their scrollbar lane and push it out into
+		 * the panel's right padding (see --gm-scrollbar-w in admin.css), so
+		 * the rows line up with the fixed parts above. The lane is as wide as
+		 * the platform's scrollbar, which is only knowable by measuring one.
+		 */
+		measureScrollbar() {
+			const probe = document.createElement('div')
+			probe.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:100px;overflow-y:auto;scrollbar-gutter:stable'
+			this.$el.appendChild(probe)
+			const width = probe.offsetWidth - probe.clientWidth
+			this.$el.removeChild(probe)
+			document.getElementById('group-manager')?.style.setProperty('--gm-scrollbar-w', width + 'px')
+		},
 
 		announce(message) {
 			// Reset first so a repeated message is still picked up as a change.

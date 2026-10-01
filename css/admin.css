@@ -6,3 +6,26 @@
 #group-manager {
 	max-width: 100%;
 }
+
+/* Scrollbars inside the app. Nextcloud styles ::-webkit-scrollbar itself (a
+   12px rounded thumb) but leaves the arrow buttons, which Windows Chrome
+   draws at both ends. The standard `scrollbar-width` can't be used for
+   this: where it is set, Chrome ignores every ::-webkit-scrollbar rule and
+   falls back to its native bar (arrows included). So WebKit/Blink get the
+   arrows hidden under Nextcloud's own styling, and only engines without
+   ::-webkit-scrollbar (Firefox) get the thin standard bar. */
+#group-manager {
+	--gm-scrollbar-w: 12px;
+}
+
+#group-manager ::-webkit-scrollbar-button {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+	#group-manager * {
+		scrollbar-width: thin;
+	}
+}
