@@ -63,6 +63,8 @@ Manager is that screen.
   remove an LDAP group's members here (that's the directory's job), and the
   panel says so with the group's DN. Everything else (browsing, group admins
   and folder assignment) works the same as for a local group.
+- **Optional top bar shortcut**: each admin can pin Group Manager to the
+  Nextcloud top bar from the groups list's menu (off by default).
 - **Keyboard-friendly**: arrow keys and Enter drive the add-field dropdown,
   Esc closes it, and switching to a different group while changes are still
   queued asks for confirmation first.
@@ -85,6 +87,10 @@ Open **Settings → Administration → Group Manager**. Pick a group on the left
 its **Members** and (if Team Folders is installed) **Folders** tabs appear on
 the right, each with its own add field and a shared **Discard**/**Apply**
 footer at the bottom of the panel.
+
+To make a member a group admin, hover their row and click the shield; the
+change joins the same queue as everything else and is applied with
+**Apply**.
 
 Creating and deleting *groups themselves* (as opposed to editing an existing
 one's membership) is also done from this screen: **Create group** at the
