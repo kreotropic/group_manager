@@ -12,7 +12,7 @@ bulk-editing local membership) and has grown two capabilities that were not
 part of the original plan: group-folder creation and assignment, and group
 admin (subadmin) management. It has an automated test suite, CI and a
 per-version test matrix (Nextcloud 31–35); 0.4.0 is its first App Store
-release. Everything in this section is already implemented and working:
+release, published 2026-10-03. Everything in this section is already implemented and working:
 
 ### Delivered
 
@@ -107,11 +107,6 @@ the platform's own contrast decisions in both light and dark themes, but
 this has not been checked systematically against the 4.5:1 minimum for
 secondary text across every screen and both themes, only spot-checked
 during development.
-
-### 2. App Store publication
-
-In progress with 0.4.0: certificate issued, matrix green on 31–35.
-Remaining: fresh screenshots, then package, sign and upload.
 
 ## Post-launch: only if there's traction
 

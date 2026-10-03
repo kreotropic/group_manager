@@ -207,24 +207,40 @@ else lists the offending files and means step 3 signed the wrong tree.
 
 ### 5. Publish
 
-First release only, two one-time steps before the upload:
-1. **Register the app** at apps.nextcloud.com (paste the `.crt` contents,
-   plus a proof-of-possession signature over the literal app id):
-   ```bash
-   echo -n "group_manager" | openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key | openssl base64
-   ```
-2. **Upload the release**: the form also asks for a signature, this time
-   over the tarball's bytes, not the app id:
-   ```bash
-   openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key build/artifacts/group_manager-signed.tar.gz | openssl base64
-   ```
-   This signature is only valid for the exact bytes uploaded; re-generating
-   the tarball afterwards invalidates it.
+The App Store does not take the file itself: its release form asks for a
+public **download URL** and a signature over the bytes behind that URL. A
+GitHub release asset is that URL.
 
-Upload `group_manager-signed.tar.gz` itself at
-<https://apps.nextcloud.com> (account signs in with GitHub). Screenshots come
-from the `<screenshot>` URLs in `info.xml`, served from this repository's
-`raw.githubusercontent.com`, so they must already be pushed.
+1. **Tag and create the GitHub release**, attaching the signed tarball under
+   a versioned name (release notes: the version's `CHANGELOG.md` section):
+   ```bash
+   cp build/artifacts/group_manager-signed.tar.gz build/artifacts/group_manager-vX.Y.Z.tar.gz
+   awk '/^## \[X.Y.Z\]/{f=1;next} /^## \[/{if(f)exit} f' CHANGELOG.md > build/artifacts/release-notes-X.Y.Z.md
+   git tag -a vX.Y.Z -m "Group Manager X.Y.Z"
+   git push origin vX.Y.Z
+   gh release create vX.Y.Z build/artifacts/group_manager-vX.Y.Z.tar.gz \
+       --title "Group Manager X.Y.Z" --notes-file build/artifacts/release-notes-X.Y.Z.md
+   ```
+   Worth checking that the asset GitHub serves is byte-identical to what was
+   signed (`curl -sL <asset url> | cmp - build/artifacts/group_manager-vX.Y.Z.tar.gz`).
+2. **Register the app** (first release only, done for 0.4.0): at
+   <https://apps.nextcloud.com/developer/apps/new> (account signs in with
+   GitHub), paste the `.crt` contents plus a proof-of-possession signature
+   over the literal app id:
+   ```bash
+   echo -n "group_manager" | openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key | openssl base64 -A
+   ```
+3. **Upload the release** at
+   <https://apps.nextcloud.com/developer/apps/releases/new>: the asset's
+   download URL, and a signature over the tarball's bytes (not the app id):
+   ```bash
+   openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key build/artifacts/group_manager-vX.Y.Z.tar.gz | openssl base64 -A
+   ```
+   This signature is only valid for those exact bytes; re-generating the
+   tarball afterwards invalidates it (and the asset on GitHub with it).
 
-For every release *after* the first, only step 2 (upload) repeats; the
-account/certificate registration is one-time.
+The App Store reads the version, description and screenshots from the
+tarball's `info.xml`; the screenshots are its `<screenshot>` URLs, served
+from this repository's `raw.githubusercontent.com`, so they must already be
+pushed. Every release after the first repeats steps 1 and 3; registration is
+one-time.
