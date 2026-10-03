@@ -149,9 +149,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   contrast), a fixed header over scrolling group and member lists, sticky
   section headers in the groups list, and one shared header height so the
   rule under the tabs runs straight across both columns.
-- Tighter header: less padding above the app, a shorter header when there
-  are no LDAP groups, and the group's summary (members, folders, disabled
-  accounts) on the same line as its name.
+- Tighter header: less padding above the app, the All / Local / LDAP filters
+  on the groups list's title line, a shorter header for every group but an
+  LDAP one (whose DN needs a line of its own), and the group's summary
+  (members, admins, folders, disabled accounts) on the same line as its name.
 - The "N after applying" count moved into that summary, so queuing the first
   change no longer shifts the add field sideways.
 - Member rows fit on one line (name, then username or email), stacking only

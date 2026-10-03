@@ -168,16 +168,17 @@ Pull requests welcome! Please open an issue first to discuss significant changes
 
 ## Screenshots
 
-| Members (bulk add/remove, chip queue) | Group folders (permissions, quota, ACL badge) |
+| Members (queued changes, group admins) | Group folders (permissions, quota, ACL badge) |
 |---|---|
 | ![Members](screenshots/1-members.png) | ![Folders](screenshots/2-folders.png) |
 
-![LDAP group (read-only members, DN shown)](screenshots/3-ldap.png)
+![LDAP group (read-only members, DN shown, group admin)](screenshots/3-ldap.png)
 
-*The snapshots above show the Members tab mid-edit-free state with the chip
-queue ready to receive changes, the Folders tab with two group folders
-assigned and their permissions, and an LDAP group's read-only member list
-with its directory DN.*
+*The Members tab with three changes queued (one person joining, one
+leaving, one becoming a group admin) and two existing group admins; the
+Folders tab with three folders at different permission levels, one with
+advanced permissions (ACL); and an LDAP group's read-only member list with
+its directory DN and a group admin.*
 
 ## Roadmap
 
