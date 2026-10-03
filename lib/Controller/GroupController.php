@@ -85,6 +85,23 @@ class GroupController extends Controller {
         });
     }
 
+    public function subAdmins(string $gid): DataResponse {
+        return $this->guarded(fn () => new DataResponse($this->groupService->getSubAdmins($gid)));
+    }
+
+    #[PasswordConfirmationRequired]
+    public function addSubAdmin(string $gid, string $uid): DataResponse {
+        return $this->guarded(fn () => new DataResponse($this->groupService->addSubAdmin($gid, $uid)));
+    }
+
+    #[PasswordConfirmationRequired]
+    public function removeSubAdmin(string $gid, string $uid): DataResponse {
+        return $this->guarded(function () use ($gid, $uid) {
+            $this->groupService->removeSubAdmin($gid, $uid);
+            return new DataResponse([]);
+        });
+    }
+
     #[PasswordConfirmationRequired]
     public function create(string $gid, string $displayName = ''): DataResponse {
         return $this->guarded(fn () => new DataResponse($this->groupService->createGroup($gid, $displayName)));

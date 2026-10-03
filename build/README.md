@@ -94,15 +94,15 @@ with the official composer image on first use.
 
 ### Last verified
 
-Run on 2026-09-27 against the fix in `[Unreleased]`:
+Run on 2026-10-03 against 0.4.0 (group admins included):
 
-| NC | PHP | Team Folders | unit | API check |
-|---|---|---|---|---|
-| 31.0.14 | 8.3.30 | 19.1.20 | 58/58 | 48/48 |
-| 32.0.15 | 8.3.35 | 20.1.18 | 58/58 | 48/48 |
-| 33.0.9 | 8.4.26 | 21.0.15 | 58/58 | 48/48 |
-| 34.0.4 | 8.5.10 | 22.0.6 | 58/58 | 48/48 |
-| 35.0.0 | 8.5.10 | 23.0.1 | 58/58 | 48/48 |
+| NC | PHP | Team Folders | unit | API check | admin race |
+|---|---|---|---|---|---|
+| 31.0.14 | 8.3.30 | 19.1.20 | 111/111 | 83/83 | PASS |
+| 32.0.15 | 8.3.35 | 20.1.18 | 111/111 | 83/83 | PASS |
+| 33.0.9 | 8.4.26 | 21.0.15 | 111/111 | 83/83 | PASS |
+| 34.0.4 | 8.5.11 | 22.0.6 | 111/111 | 83/83 | PASS |
+| 35.0.0 | 8.5.10 | 23.0.1 | 111/111 | 83/83 | PASS |
 
 Every instance ran PHP 8.3 or newer (that is all the images ship), so
 nothing here says anything about PHP 8.1, which `info.xml` still declares as

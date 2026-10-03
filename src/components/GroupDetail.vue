@@ -83,16 +83,18 @@
 			</div>
 
 			<div class="gm-detail-panel__body">
-				<GroupMembersManager v-if="group.canAddUser || group.canRemoveUser"
-					v-show="!showTabs || activeTab === 'members'"
+				<!-- Every group, LDAP included: membership may be read-only, but
+				     group admins are managed here regardless of backend. -->
+				<GroupMembersManager v-show="!showTabs || activeTab === 'members'"
 					ref="membersManager"
 					:group-id="group.id"
 					:hide-title="true"
 					:total-member-count="group.memberCount"
+					:can-add="group.canAddUser"
+					:can-remove="group.canRemoveUser"
 					class="gm-detail__tab-content"
 					@changed="onMembersChanged"
 					@pending-changed="onMembersPendingChanged" />
-				<GroupMembersList v-else v-show="!showTabs || activeTab === 'members'" :group-id="group.id" class="gm-detail__tab-content" />
 
 				<GroupFoldersManager v-if="showTabs"
 					v-show="activeTab === 'folders'"
@@ -154,13 +156,12 @@ import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
-import GroupMembersList from './GroupMembersList.vue'
 import GroupMembersManager from './GroupMembersManager.vue'
 import GroupFoldersManager from './GroupFoldersManager.vue'
 import { fetchGroup, deleteGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
-const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0, current: null, after: null }
+const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0, admins: 0, current: null, after: null }
 
 export default {
 	name: 'GroupDetail',
@@ -176,7 +177,6 @@ export default {
 		Pencil,
 		TrashCanOutline,
 		RenameGroupDialog,
-		GroupMembersList,
 		GroupMembersManager,
 		GroupFoldersManager,
 	},
@@ -215,7 +215,10 @@ export default {
 			if (this.group.backend === 'local') {
 				parts.push(t('group_manager', 'Local group'))
 			}
-			if (this.membersPending.hasPendingChanges && this.membersPending.after !== null) {
+			// Only membership changes move the count; queued group admin
+			// changes alone would just repeat it as "N after applying".
+			const membershipChanges = this.membersPending.joining + this.membersPending.leaving
+			if (membershipChanges > 0 && this.membersPending.after !== null) {
 				parts.push(t('group_manager', '{current} members · {after} after applying', {
 					current: this.membersPending.current,
 					after: this.membersPending.after,
@@ -224,6 +227,9 @@ export default {
 				parts.push(this.group.memberCount
 					? n('group_manager', '%n member', '%n members', this.group.memberCount)
 					: t('group_manager', 'no members'))
+			}
+			if (this.group.subAdminCount) {
+				parts.push(n('group_manager', '%n group admin', '%n group admins', this.group.subAdminCount))
 			}
 			if (this.group.disabledCount) {
 				parts.push(n('group_manager', '%n disabled', '%n disabled', this.group.disabledCount))
@@ -253,11 +259,11 @@ export default {
 		},
 
 		// Only while there is something to apply or an apply is running:
-		// on a read-only group, or with nothing staged, the bar was just
-		// "No pending changes" plus two dead buttons.
+		// with nothing staged, the bar was just "No pending changes" plus two
+		// dead buttons. Every group can stage something now (group admins,
+		// even on a read-only LDAP group), so that is the only condition.
 		showFooter() {
-			return (this.showTabs || this.group?.canAddUser || this.group?.canRemoveUser)
-				&& (this.hasPendingChanges || this.applying)
+			return this.hasPendingChanges || this.applying
 		},
 
 		footerSummaryText() {
@@ -268,6 +274,9 @@ export default {
 				}
 				if (this.membersPending.leaving > 0) {
 					parts.push(t('group_manager', '{count} leaving', { count: this.membersPending.leaving }))
+				}
+				if (this.membersPending.admins > 0) {
+					parts.push(n('group_manager', '%n group admin change', '%n group admin changes', this.membersPending.admins))
 				}
 				return parts.join(' · ')
 			}

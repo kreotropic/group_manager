@@ -116,6 +116,35 @@ export async function removeGroupMember(gid, uid) {
 }
 
 /**
+ * A group's admins (Nextcloud subadmins), members or not. Returns
+ * { subAdmins: [{ uid, displayName, email, enabled, isMember }], canGrant }.
+ */
+export async function fetchSubAdmins(gid) {
+	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/subadmins'))
+	return data
+}
+
+/**
+ * Make a member one of the group's admins. Idempotent; works for LDAP groups.
+ */
+export async function addSubAdmin(gid, uid) {
+	const { data } = await axios.post(
+		base('/api/groups/' + encodeURIComponent(gid) + '/subadmins/' + encodeURIComponent(uid)),
+	)
+	return data
+}
+
+/**
+ * End a group admin assignment, member or not. Idempotent.
+ */
+export async function removeSubAdmin(gid, uid) {
+	const { data } = await axios.delete(
+		base('/api/groups/' + encodeURIComponent(gid) + '/subadmins/' + encodeURIComponent(uid)),
+	)
+	return data
+}
+
+/**
  * Group folders already assigned to a group, with per-group permissions.
  * Works for LDAP groups too — folder assignment isn't gated by backend.
  */

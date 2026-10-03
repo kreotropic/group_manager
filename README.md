@@ -52,10 +52,17 @@ Manager is that screen.
   Nextcloud asks you to confirm your password first, since this creates real
   storage. This works for LDAP groups too: group-folder assignment isn't
   tied to how the group's *members* are managed, only membership is.
+- **Group admins**: the shield on a member's row makes them an admin of that
+  group (a Nextcloud "subadmin", who can then manage its members from the
+  Users page), queued and applied like any other change. Removing a member
+  also ends their group admin role. Admins who aren't members (Nextcloud
+  allows that, from the core Users page) are listed above the members and
+  can be revoked. The `admin` group can't get group admins, as in Nextcloud's
+  own provisioning API: one could add themselves to `admin`.
 - **LDAP groups are read-only where they have to be**: you can't add or
   remove an LDAP group's members here (that's the directory's job), and the
-  panel says so with the group's DN. Everything else (browsing, and folder
-  assignment) works the same as for a local group.
+  panel says so with the group's DN. Everything else (browsing, group admins
+  and folder assignment) works the same as for a local group.
 - **Keyboard-friendly**: arrow keys and Enter drive the add-field dropdown,
   Esc closes it, and switching to a different group while changes are still
   queued asks for confirmation first.
@@ -90,8 +97,8 @@ bottom of the list, **Delete group** in a group's own header.
   offered, since there is nothing to assign.
 - **LDAP group *membership* cannot be edited here, by design.** LDAP/AD is
   the source of truth for who belongs to a synced group; this app only lets
-  you browse it. Folder access for that same group is a separate, local
-  concept and stays editable.
+  you browse it. Folder access and group admins for that same group are
+  separate, local concepts and stay editable.
 - **Quota is a folder property, not a per-group one.** Changing it from a
   group's Folders tab changes it for every other group that also has access
   to that folder; the UI says this explicitly next to the field.
