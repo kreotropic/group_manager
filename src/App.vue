@@ -8,7 +8,7 @@
 			{{ loadError }}
 		</NcNoteCard>
 
-		<div class="gm-layout">
+		<div class="gm-layout" :class="{ 'gm-layout--compact': !hasLdapGroups }">
 			<GroupList :groups="groups"
 				:loading="loading"
 				:selected-id="selectedId"
@@ -94,6 +94,16 @@ export default {
 			announcement: '',
 			quickAccess: false,
 		}
+	},
+
+	computed: {
+		/**
+		 * LDAP groups add the origin filters under the list's search and a DN
+		 * line to the detail header; without them both columns need less room.
+		 */
+		hasLdapGroups() {
+			return this.groups.some((group) => group.backend === 'ldap')
+		},
 	},
 
 	async mounted() {
@@ -316,13 +326,19 @@ export default {
 	/* Height of the top region of BOTH columns (title, search/subtitle,
 	   tabs). Sharing one value keeps the rule under the tabs a single
 	   continuous line across the list and the detail panel. */
-	--gm-top-h: 156px;
+	--gm-top-h: 132px;
 	display: flex;
 	height: calc(100vh - 130px);
 	min-height: 480px;
 	overflow: hidden;
 	position: relative;
 	background: var(--color-main-background);
+}
+
+/* No LDAP groups: no origin filters, no DN line -- title, search/subtitle
+   and tabs fit in less. */
+.gm-layout--compact {
+	--gm-top-h: 96px;
 }
 
 .gm-detail {

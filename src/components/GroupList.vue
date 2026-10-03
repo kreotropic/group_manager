@@ -298,14 +298,14 @@ export default {
 	z-index: 1;
 }
 
-/* Same 26px top inset and 32px title row as the detail panel's header, so
+/* Same 8px top inset and 32px title row as the detail panel's header, so
    "Groups" and the group's name sit on one line. */
 .gm-list__header {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	min-height: 32px;
-	padding: 26px 12px 0 20px;
+	padding: 8px 12px 0 20px;
 	box-sizing: content-box;
 	--default-clickable-area: 32px;
 }

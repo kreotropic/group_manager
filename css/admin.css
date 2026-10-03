@@ -7,6 +7,12 @@
 	max-width: 100%;
 }
 
+/* Nextcloud's .section pads 30px on every side; on top that only pushed the
+   app down under the settings navigation toggle. */
+#group-manager.section {
+	padding-top: 8px;
+}
+
 /* Scrollbars inside the app. Nextcloud styles ::-webkit-scrollbar itself (a
    12px rounded thumb) but leaves the arrow buttons, which Windows Chrome
    draws at both ends. The standard `scrollbar-width` can't be used for

@@ -16,25 +16,27 @@
 			<div class="gm-detail-panel__fixed">
 				<header class="gm-detail__header">
 					<div class="gm-detail__titles">
-						<h2 class="gm-detail__name">
-							<span class="gm-detail__name-text">{{ group.displayName }}</span>
-							<span v-if="group.backend !== 'local'"
-								class="gm-detail__badge"
-								:title="t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.')">
-								{{ t('group_manager', 'LDAP · read-only') }}
-							</span>
-							<NcButton v-if="group.canRename"
-								class="gm-detail__rename"
-								variant="tertiary"
-								:aria-label="t('group_manager', 'Rename group')"
-								:title="t('group_manager', 'Rename group')"
-								@click="showRenameDialog = true">
-								<template #icon>
-									<Pencil :size="16" />
-								</template>
-							</NcButton>
-						</h2>
-						<p v-if="subtitleText" class="gm-detail__subtitle">{{ subtitleText }}</p>
+						<div class="gm-detail__heading">
+							<h2 class="gm-detail__name">
+								<span class="gm-detail__name-text">{{ group.displayName }}</span>
+								<span v-if="group.backend !== 'local'"
+									class="gm-detail__badge"
+									:title="t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.')">
+									{{ t('group_manager', 'LDAP · read-only') }}
+								</span>
+								<NcButton v-if="group.canRename"
+									class="gm-detail__rename"
+									variant="tertiary"
+									:aria-label="t('group_manager', 'Rename group')"
+									:title="t('group_manager', 'Rename group')"
+									@click="showRenameDialog = true">
+									<template #icon>
+										<Pencil :size="16" />
+									</template>
+								</NcButton>
+							</h2>
+							<p v-if="subtitleText" class="gm-detail__subtitle">{{ subtitleText }}</p>
+						</div>
 						<p v-if="group.dn" class="gm-detail__dn">
 							<span class="gm-detail__dn-label">DN</span>
 							<code class="gm-detail__dn-value">{{ group.dn }}</code>
@@ -158,7 +160,7 @@ import GroupFoldersManager from './GroupFoldersManager.vue'
 import { fetchGroup, deleteGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
-const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0 }
+const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0, current: null, after: null }
 
 export default {
 	name: 'GroupDetail',
@@ -213,9 +215,16 @@ export default {
 			if (this.group.backend === 'local') {
 				parts.push(t('group_manager', 'Local group'))
 			}
-			parts.push(this.group.memberCount
-				? n('group_manager', '%n member', '%n members', this.group.memberCount)
-				: t('group_manager', 'no members'))
+			if (this.membersPending.hasPendingChanges && this.membersPending.after !== null) {
+				parts.push(t('group_manager', '{current} members · {after} after applying', {
+					current: this.membersPending.current,
+					after: this.membersPending.after,
+				}))
+			} else {
+				parts.push(this.group.memberCount
+					? n('group_manager', '%n member', '%n members', this.group.memberCount)
+					: t('group_manager', 'no members'))
+			}
 			if (this.group.disabledCount) {
 				parts.push(n('group_manager', '%n disabled', '%n disabled', this.group.disabledCount))
 			}
@@ -457,7 +466,7 @@ export default {
 	/* +1px: the list's rule is the top border of its scroll area, below its
 	   top region; this one is the last pixel of this box. */
 	height: calc(var(--gm-top-h) + 1px);
-	padding-top: 26px;
+	padding-top: 8px;
 	border-bottom: 1px solid var(--color-border);
 }
 
@@ -531,8 +540,22 @@ export default {
 	white-space: nowrap;
 }
 
+/* Name and subtitle share a baseline; when the subtitle doesn't fit beside a
+   long name it wraps underneath instead of squeezing the name. */
+.gm-detail__heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	column-gap: 12px;
+}
+
+.gm-detail__heading .gm-detail__name {
+	min-width: 0;
+	max-width: 100%;
+}
+
 .gm-detail__subtitle {
-	margin: 2px 0 0;
+	margin: 0;
 	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }

@@ -10,7 +10,6 @@
 					{{ t('group_manager', 'Members') }}
 					<span v-if="headerCountText" class="gm-mm__count">{{ headerCountText }}</span>
 				</h3>
-				<span v-else-if="hasPendingChanges" class="gm-mm__count">{{ afterApplyingText }}</span>
 
 				<div ref="addWrapper" class="gm-mm__add" :class="{ 'gm-mm__add--open': showDropdown }">
 					<AccountOutline :size="18" class="gm-mm__add-icon" />
@@ -460,13 +459,6 @@ export default {
 			return this.effectiveTotal - this.pendingRemove.length + this.pendingAdd.length
 		},
 
-		afterApplyingText() {
-			if (this.effectiveTotal === null) {
-				return t('group_manager', '{count} pending change(s)', { count: this.pendingCount })
-			}
-			return t('group_manager', '{after} after applying', { after: this.afterApplyingCount })
-		},
-
 		pasteReviewSummary() {
 			if (!this.pasteReview) {
 				return ''
@@ -536,6 +528,11 @@ export default {
 				count: this.pendingCount,
 				joining: this.pendingAdd.length,
 				leaving: this.pendingRemove.length,
+				// Shown by the parent's subtitle (hide-title mode): the count
+				// used to sit left of the add field and shifted it sideways
+				// every time the first change was queued.
+				current: this.effectiveTotal,
+				after: this.effectiveTotal === null ? null : this.afterApplyingCount,
 			})
 		},
 
@@ -1054,10 +1051,18 @@ export default {
 }
 
 .gm-mm__header {
+	/* One explicit height for the add field and the filter's input, so the two
+	   outlines match whatever NcTextField's own sizing does (it is 4px short of
+	   --default-clickable-area: the 1px outline is drawn outside that box). */
+	--gm-field-h: calc(var(--default-clickable-area) - 4px);
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	margin-bottom: 12px;
+}
+
+.gm-mm__search :deep(input) {
+	height: var(--gm-field-h);
 }
 
 .gm-mm__title {
@@ -1092,8 +1097,7 @@ export default {
 	gap: 0;
 	flex: 1 1 0;
 	min-width: 0;
-	/* NcTextField's visible box is 2px short of --default-clickable-area. */
-	height: calc(var(--default-clickable-area) - 2px);
+	height: var(--gm-field-h);
 	padding: 0 12px 0 0;
 	/* Same outline (a box-shadow pair, not a border), height and
 	   icon-to-text distance as NcTextField, so this field and the filter
@@ -1118,7 +1122,11 @@ export default {
 	flex: 1;
 	min-width: 0;
 	padding: 0;
-	height: 100%;
+	/* Nextcloud's global input rule adds a min-height and a 3px margin, which
+	   made this input taller than the box drawn around it. */
+	margin: 0 !important;
+	min-height: 0 !important;
+	height: var(--gm-field-h) !important;
 	border: none;
 	outline: none;
 	background: transparent;
