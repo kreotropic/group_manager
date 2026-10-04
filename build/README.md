@@ -242,11 +242,28 @@ GitHub release asset is that URL.
 The App Store reads the version, description and screenshots from the
 tarball's `info.xml`; the screenshots are its `<screenshot>` URLs, served
 from this repository's `raw.githubusercontent.com`, so they must already be
-pushed. The App Store downloads them **once, at upload**, and keeps that copy:
-if a URL was unreachable at that moment it stores an empty image and never
-retries, and re-uploading the same release does not refetch it (0.4.0 shipped
-with no screenshots this way). That is why the URLs point at the release tag
-(`.../group_manager/vX.Y.Z/screenshots/...`) rather than `master`: bump them
-with the version, push the tag (step 1) before uploading (step 3), and every
-release gets fresh URLs that are guaranteed to exist. Every release after the
-first repeats steps 1 and 3; registration is one-time.
+pushed. Since September 2026 neither the store site nor Nextcloud instances
+load those URLs directly: a cron job behind `usercontent.apps.nextcloud.com`
+copies each one once and serves that copy under
+`https://usercontent.apps.nextcloud.com/<base64url of the screenshot URL>`,
+never refreshing a URL it already holds. That is why the URLs point at the
+release tag (`.../group_manager/vX.Y.Z/screenshots/...`) rather than
+`master`: bump them with the version and push the tag (step 1) before
+uploading (step 3), so new screenshots get new URLs and always match the
+version. Re-uploading a release does not make the mirror fetch again.
+
+If the listing shows blank screenshots, check what the mirror holds before
+changing anything here:
+
+```bash
+curl -s "https://usercontent.apps.nextcloud.com/$(printf %s '<screenshot URL>' | base64 -w0 | tr '+/' '-_')" | head -c 16 | xxd
+```
+
+A PNG header means it is fine; `File not found` means it has not been copied
+yet; a 640×360 "Preview not available" PNG means the copy failed (URL
+unreachable, not an image, over 2 MiB). An **empty body** is a mirror-side
+bug: since about July 2026 every newly copied screenshot is served empty, for
+every app (0.4.0 and 0.4.1 both show blank screenshots for this reason), see
+[usercontent.apps.nextcloud.com#26](https://github.com/nextcloud/usercontent.apps.nextcloud.com/issues/26).
+Nothing in the app can fix that. Every release after the first repeats steps
+1 and 3; registration is one-time.

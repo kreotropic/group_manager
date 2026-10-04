@@ -12,13 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [0.4.1] - 2026-10-04
 
-### Fixed
-- **The App Store listing showed no screenshots.** The App Store downloads
-  screenshots once, when a release is uploaded, and 0.4.0 was uploaded before
-  the new screenshots reached GitHub, so it stored empty images and never
-  fetched them again. Screenshot URLs now point at the release's own tag
-  instead of `master`, so every release gets fresh URLs (and the images always
-  match that version). No code changes.
+### Changed
+- App Store screenshot URLs now point at the release's own tag instead of
+  `master`. The App Store's screenshot mirror copies each URL once and never
+  refreshes it, so a new URL per release is the only way updated screenshots
+  reach the listing, and the images always match that version. No code
+  changes.
+
+  This release was made to fix the blank screenshots on the App Store
+  listing, and it can't: they are blank because of a bug in the App Store's
+  screenshot mirror, which serves every recently copied screenshot empty
+  ([usercontent.apps.nextcloud.com#26](https://github.com/nextcloud/usercontent.apps.nextcloud.com/issues/26)).
 
 ## [0.4.0] - 2026-10-03
 
