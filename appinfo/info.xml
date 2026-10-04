@@ -24,7 +24,7 @@ folders and their per-group permissions and quota, without leaving Settings.
 - LDAP group membership stays read-only, as the directory is the source of truth; everything else,
   group admins included, works the same as for a local group.
     ]]></description>
-    <version>0.4.0</version>
+    <version>0.4.1</version>
     <licence>AGPL-3.0-or-later</licence>
     <author mail="rsfneg@gmail.com">Ricardo Ferreira</author>
     <namespace>GroupManager</namespace>
@@ -33,9 +33,9 @@ folders and their per-group permissions and quota, without leaving Settings.
     <bugs>https://github.com/kreotropic/group_manager/issues</bugs>
     <repository type="git">https://github.com/kreotropic/group_manager.git</repository>
 
-    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/master/screenshots/1-members.png</screenshot>
-    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/master/screenshots/2-folders.png</screenshot>
-    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/master/screenshots/3-ldap.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/v0.4.1/screenshots/1-members.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/v0.4.1/screenshots/2-folders.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/kreotropic/group_manager/v0.4.1/screenshots/3-ldap.png</screenshot>
 
     <dependencies>
         <php min-version="8.1"/>

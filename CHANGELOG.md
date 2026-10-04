@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-04
+
+### Fixed
+- **The App Store listing showed no screenshots.** The App Store downloads
+  screenshots once, when a release is uploaded, and 0.4.0 was uploaded before
+  the new screenshots reached GitHub, so it stored empty images and never
+  fetched them again. Screenshot URLs now point at the release's own tag
+  instead of `master`, so every release gets fresh URLs (and the images always
+  match that version). No code changes.
+
 ## [0.4.0] - 2026-10-03
 
 ### Fixed

@@ -242,5 +242,11 @@ GitHub release asset is that URL.
 The App Store reads the version, description and screenshots from the
 tarball's `info.xml`; the screenshots are its `<screenshot>` URLs, served
 from this repository's `raw.githubusercontent.com`, so they must already be
-pushed. Every release after the first repeats steps 1 and 3; registration is
-one-time.
+pushed. The App Store downloads them **once, at upload**, and keeps that copy:
+if a URL was unreachable at that moment it stores an empty image and never
+retries, and re-uploading the same release does not refetch it (0.4.0 shipped
+with no screenshots this way). That is why the URLs point at the release tag
+(`.../group_manager/vX.Y.Z/screenshots/...`) rather than `master`: bump them
+with the version, push the tag (step 1) before uploading (step 3), and every
+release gets fresh URLs that are guaranteed to exist. Every release after the
+first repeats steps 1 and 3; registration is one-time.
