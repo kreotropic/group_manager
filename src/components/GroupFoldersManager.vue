@@ -1086,9 +1086,13 @@ export default {
 
 .gm-fm__col-perm {
 	flex: none;
-	width: 62px;
+	/* Wide enough for the longest header ("PARTILHAR", "ELIMINAR") in
+	   bold capitals with their letter-spacing; at 62px they ran into each
+	   other. */
+	width: 92px;
 	display: flex;
 	justify-content: center;
+	white-space: nowrap;
 }
 
 .gm-fm__col-spacer {
