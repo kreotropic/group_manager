@@ -36,6 +36,10 @@ class GroupFolderController extends Controller {
         return $this->guarded(fn () => new DataResponse(['folders' => $this->folderAssignmentService->listAssigned($gid)]));
     }
 
+    public function mountPoints(): DataResponse {
+        return $this->guarded(fn () => new DataResponse(['folders' => $this->folderAssignmentService->listMountPoints()]));
+    }
+
     public function search(string $gid, string $search = '', int $limit = 10): DataResponse {
         return $this->guarded(fn () => new DataResponse(['folders' => $this->folderAssignmentService->searchAssignable($gid, $search, $limit)]));
     }

@@ -29,6 +29,9 @@ return [
         ['name' => 'group#rename', 'url' => '/api/groups/{gid}', 'verb' => 'PUT', 'requirements' => ['gid' => '[^/]+']],
         ['name' => 'group#destroy', 'url' => '/api/groups/{gid}', 'verb' => 'DELETE', 'requirements' => ['gid' => '[^/]+']],
 
+        // Not under /groups/{gid}: the picker's tree is about every group folder.
+        ['name' => 'group_folder#mountPoints', 'url' => '/api/folders/mount-points', 'verb' => 'GET'],
+
         // folderId is constrained to digits so it never collides with the
         // 'search'/'create' path segments regardless of declaration order.
         ['name' => 'group_folder#search', 'url' => '/api/groups/{gid}/folders/search', 'verb' => 'GET', 'requirements' => ['gid' => '[^/]+']],

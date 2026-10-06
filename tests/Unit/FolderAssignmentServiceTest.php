@@ -359,6 +359,18 @@ class FolderAssignmentServiceTest extends TestCase {
         $this->assertRejectsMissingGroup(fn () => $this->service->assignFolder('ghost', 5));
     }
 
+    public function testListMountPointsRejectsDisabledApp(): void {
+        $this->appManager->method('isEnabledForUser')->willReturn(false);
+        $this->db->expects($this->never())->method('getQueryBuilder');
+
+        try {
+            $this->service->listMountPoints();
+            $this->fail('Expected GroupServiceException');
+        } catch (GroupServiceException $e) {
+            $this->assertSame('GROUPFOLDERS_DISABLED', $e->errorCode);
+        }
+    }
+
     public function testCreateFolderRejectsMissingGroupBeforeTouchingGroupfolders(): void {
         $this->assertRejectsMissingGroup(fn () => $this->service->createFolder('ghost', 'Shared'));
     }

@@ -166,6 +166,30 @@ class FolderAssignmentService {
     }
 
     /**
+     * Every group folder's id and mount point, for the create dialog's
+     * folder-path picker: the levels of the tree are the `/`-separated parts
+     * of these. One narrow query on groupfolders' own table (same approach as
+     * mountPointExists()), not fetchAllFolders(), which would also compute
+     * each folder's size just to throw it away.
+     *
+     * @return list<array{id: int, mountPoint: string}>
+     */
+    public function listMountPoints(): array {
+        $this->requireEnabled();
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('folder_id', 'mount_point')
+            ->from('group_folders')
+            ->orderBy('mount_point');
+        $result = $qb->executeQuery();
+        $rows = $result->fetchAll();
+        $result->closeCursor();
+        return array_map(
+            static fn (array $row): array => ['id' => (int) $row['folder_id'], 'mountPoint' => (string) $row['mount_point']],
+            $rows,
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function assignFolder(string $gid, int $folderId): array {

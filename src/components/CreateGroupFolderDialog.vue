@@ -7,15 +7,11 @@
 		:name="t('group_manager', 'Create group folder')"
 		:buttons="buttons"
 		is-form
-		size="small"
+		size="normal"
 		@update:open="onUpdateOpen"
 		@closing="reset">
 		<div class="gm-create-folder-dialog">
-			<NcTextField ref="mountPointField"
-				v-model="mountPoint"
-				:label="t('group_manager', 'Folder name')"
-				:error="Boolean(errorMessage)"
-				autofocus />
+			<MountPointPicker v-model="mountPoint" />
 			<NcNoteCard v-if="errorMessage" type="error">
 				{{ errorMessage }}
 			</NcNoteCard>
@@ -25,7 +21,7 @@
 
 <script>
 import NcDialog from '@nextcloud/vue/components/NcDialog'
-import NcTextField from '@nextcloud/vue/components/NcTextField'
+import MountPointPicker from './MountPointPicker.vue'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { translate as t } from '@nextcloud/l10n'
 import { confirmPassword } from '@nextcloud/password-confirmation'
@@ -38,7 +34,7 @@ export default {
 
 	components: {
 		NcDialog,
-		NcTextField,
+		MountPointPicker,
 		NcNoteCard,
 	},
 

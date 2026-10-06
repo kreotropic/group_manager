@@ -147,6 +147,15 @@ export async function createGroupFolder(gid, mountPoint) {
 }
 
 /**
+ * Every group folder's id and mount point — the picker builds its tree of
+ * levels from the `/`-separated parts of these.
+ */
+export async function fetchMountPoints() {
+	const { data } = await axios.get(base('/api/folders/mount-points'))
+	return data.folders
+}
+
+/**
  * Give a group access to a folder — defaults to full (write/share/delete)
  * permissions, same default the groupfolders admin UI itself uses.
  */
