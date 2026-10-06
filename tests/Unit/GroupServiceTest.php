@@ -765,4 +765,166 @@ class GroupServiceTest extends TestCase {
 
         $this->assertSame([], $result['groups']);
     }
+
+    /**
+     * A GroupService whose ISubAdmin is configured by the test itself --
+     * setUp()'s own mock already stubs getGroupsSubAdmins() to [] for
+     * everything else.
+     */
+    private function serviceWithSubAdmin(ISubAdmin&MockObject $subAdmin): GroupService {
+        return new GroupService(
+            $this->groupManager,
+            $this->userManager,
+            $subAdmin,
+            $this->ldapProviderFactory,
+            $this->folderAssignmentService,
+            $this->userSession,
+            $this->l,
+            $this->lockingProvider,
+        );
+    }
+
+    public function testGetSubAdminsFlagsMembershipAndSortsByName(): void {
+        $group = $this->group('finance', ['Database']);
+        $this->groupManager->method('get')->with('finance')->willReturn($group);
+        $zoe = $this->user('zoe');
+        $zoe->method('getDisplayName')->willReturn('Zoe');
+        $ana = $this->user('ana');
+        $ana->method('getDisplayName')->willReturn('Ana');
+        $group->method('inGroup')->willReturnCallback(fn (IUser $u) => $u->getUID() === 'zoe');
+
+        $subAdmin = $this->createMock(ISubAdmin::class);
+        $subAdmin->method('getGroupsSubAdmins')->with($group)->willReturn([$zoe, $ana]);
+
+        $result = $this->serviceWithSubAdmin($subAdmin)->getSubAdmins('finance');
+
+        $this->assertSame(['ana', 'zoe'], array_column($result['subAdmins'], 'uid'));
+        $this->assertSame([false, true], array_column($result['subAdmins'], 'isMember'));
+        $this->assertTrue($result['canGrant']);
+    }
+
+    public function testGetSubAdminsReportsAdminGroupAsNotGrantable(): void {
+        $admin = $this->group('admin', ['Database']);
+        $this->groupManager->method('get')->with('admin')->willReturn($admin);
+
+        $this->assertFalse($this->service->getSubAdmins('admin')['canGrant']);
+    }
+
+    public function testAddSubAdminCreatesAssignmentForMember(): void {
+        $group = $this->group('finance', ['Database']);
+        $group->method('inGroup')->willReturn(true);
+        $this->groupManager->method('get')->with('finance')->willReturn($group);
+        $bob = $this->user('bob');
+        $this->userManager->method('get')->with('bob')->willReturn($bob);
+
+        $this->subAdmin->method('isSubAdminOfGroup')->willReturn(false);
+        $this->subAdmin->expects($this->once())->method('createSubAdmin')->with($bob, $group);
+
+        $result = $this->service->addSubAdmin('finance', 'bob');
+        $this->assertTrue($result['isMember']);
+    }
+
+    public function testAddSubAdminWorksForLdapGroups(): void {
+        // The assignment lives in Nextcloud's own table, not the directory.
+        $group = $this->group('ldap-team', ['LDAP']);
+        $group->method('inGroup')->willReturn(true);
+        $this->groupManager->method('get')->with('ldap-team')->willReturn($group);
+        $this->userManager->method('get')->willReturn($this->user('bob'));
+
+        $this->subAdmin->expects($this->once())->method('createSubAdmin');
+
+        $this->service->addSubAdmin('ldap-team', 'bob');
+    }
+
+    public function testAddSubAdminIsNoopWhenAlreadyAssigned(): void {
+        $group = $this->group('finance', ['Database']);
+        $group->method('inGroup')->willReturn(true);
+        $this->groupManager->method('get')->willReturn($group);
+        $this->userManager->method('get')->willReturn($this->user('bob'));
+
+        $this->subAdmin->method('isSubAdminOfGroup')->willReturn(true);
+        $this->subAdmin->expects($this->never())->method('createSubAdmin');
+
+        $this->service->addSubAdmin('finance', 'bob');
+    }
+
+    public function testAddSubAdminRejectsNonMember(): void {
+        $group = $this->group('finance', ['Database']);
+        $group->method('inGroup')->willReturn(false);
+        $this->groupManager->method('get')->willReturn($group);
+        $this->userManager->method('get')->willReturn($this->user('bob'));
+
+        $this->subAdmin->expects($this->never())->method('createSubAdmin');
+
+        $this->assertServiceException(fn () => $this->service->addSubAdmin('finance', 'bob'), 'NOT_A_MEMBER', 400);
+    }
+
+    public function testAddSubAdminRejectsAdminGroup(): void {
+        $admin = $this->group('admin', ['Database']);
+        $admin->method('inGroup')->willReturn(true);
+        $this->groupManager->method('get')->willReturn($admin);
+        $this->userManager->method('get')->willReturn($this->user('bob'));
+
+        $this->subAdmin->expects($this->never())->method('createSubAdmin');
+
+        $this->assertServiceException(fn () => $this->service->addSubAdmin('admin', 'bob'), 'ADMIN_GROUP_PROTECTED', 403);
+    }
+
+    public function testAddSubAdminRejectsUnknownUser(): void {
+        $this->groupManager->method('get')->willReturn($this->group('finance', ['Database']));
+        $this->userManager->method('get')->willReturn(null);
+
+        $this->assertServiceException(fn () => $this->service->addSubAdmin('finance', 'ghost'), 'USER_NOT_FOUND', 404);
+    }
+
+    public function testRemoveSubAdminDeletesAssignmentEvenOnAdminGroup(): void {
+        $admin = $this->group('admin', ['Database']);
+        $this->groupManager->method('get')->willReturn($admin);
+        $bob = $this->user('bob');
+        $this->userManager->method('get')->willReturn($bob);
+
+        $this->subAdmin->method('isSubAdminOfGroup')->willReturn(true);
+        $this->subAdmin->expects($this->once())->method('deleteSubAdmin')->with($bob, $admin);
+
+        $this->service->removeSubAdmin('admin', 'bob');
+    }
+
+    public function testRemoveSubAdminIsNoopWhenNotAssigned(): void {
+        $this->groupManager->method('get')->willReturn($this->group('finance', ['Database']));
+        $this->userManager->method('get')->willReturn($this->user('bob'));
+
+        $this->subAdmin->method('isSubAdminOfGroup')->willReturn(false);
+        $this->subAdmin->expects($this->never())->method('deleteSubAdmin');
+
+        $this->service->removeSubAdmin('finance', 'bob');
+    }
+
+    public function testRemoveMemberAlsoEndsGroupAdminAssignment(): void {
+        $group = $this->group('finance', ['Database']);
+        $group->method('inGroup')->willReturn(true);
+        $group->expects($this->once())->method('removeUser');
+        $this->groupManager->method('get')->willReturn($group);
+        $bob = $this->user('bob');
+        $this->userManager->method('get')->willReturn($bob);
+
+        $this->subAdmin->method('isSubAdminOfGroup')->willReturn(true);
+        $this->subAdmin->expects($this->once())->method('deleteSubAdmin')->with($bob, $group);
+
+        $this->service->removeMember('finance', 'bob');
+    }
+
+    public function testRemoveMemberKeepsGroupAdminWhenAdminGroupRemovalIsRefused(): void {
+        // A refused removal (here: removing oneself from "admin") must not
+        // half-apply by still ending the group admin assignment.
+        $admin = $this->group('admin', ['Database'], memberCount: 2);
+        $admin->method('inGroup')->willReturn(true);
+        $this->groupManager->method('get')->willReturn($admin);
+        $alice = $this->user('alice');
+        $this->userManager->method('get')->willReturn($alice);
+        $this->userSession->method('getUser')->willReturn($alice);
+
+        $this->subAdmin->expects($this->never())->method('deleteSubAdmin');
+
+        $this->assertServiceException(fn () => $this->service->removeMember('admin', 'alice'), 'CANNOT_REMOVE_SELF_FROM_ADMIN', 403);
+    }
 }

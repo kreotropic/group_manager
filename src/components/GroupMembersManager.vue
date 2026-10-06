@@ -5,14 +5,16 @@
 <template>
 	<div class="gm-mm">
 		<div class="gm-mm__scroll">
-			<div class="gm-mm__header">
+			<div v-if="!hideTitle || canAdd || showFilter" class="gm-mm__header">
 				<h3 v-if="!hideTitle" class="gm-mm__title">
 					{{ t('group_manager', 'Members') }}
 					<span v-if="headerCountText" class="gm-mm__count">{{ headerCountText }}</span>
 				</h3>
-				<span v-else-if="hasPendingChanges" class="gm-mm__count">{{ afterApplyingText }}</span>
 
-				<div ref="addWrapper" class="gm-mm__add" :class="{ 'gm-mm__add--open': showDropdown }">
+				<div v-if="canAdd"
+					ref="addWrapper"
+					class="gm-mm__add"
+					:class="{ 'gm-mm__add--open': showDropdown }">
 					<AccountOutline :size="18" class="gm-mm__add-icon" />
 					<input ref="addInput"
 						v-model="addQuery"
@@ -100,7 +102,11 @@
 					class="gm-mm__chip"
 					:class="'gm-mm__chip--' + chip.kind"
 					:title="chip.error || undefined">
-					<span class="gm-mm__chip-prefix" aria-hidden="true">{{ chip.kind === 'remove' ? '−' : '+' }}</span>
+					<ShieldAccount v-if="chip.kind === 'grant' || chip.kind === 'revoke'"
+						:size="14"
+						class="gm-mm__chip-prefix"
+						:title="chip.kind === 'grant' ? t('group_manager', 'Becomes a group admin') : t('group_manager', 'Stops being a group admin')" />
+					<span v-else class="gm-mm__chip-prefix" aria-hidden="true">{{ chip.kind === 'remove' ? '−' : '+' }}</span>
 					<span class="gm-mm__chip-label">
 						{{ chip.displayName }}<span v-if="chip.count > 1" class="gm-mm__chip-count">{{ chip.count }}</span>
 					</span>
@@ -142,6 +148,24 @@
 				</div>
 			</div>
 
+			<p v-if="outsideSubAdmins.length > 0" class="gm-mm__outside-admins">
+				<span class="gm-mm__outside-admins-label">{{ t('group_manager', 'Also group admins, not members:') }}</span>
+				<span v-for="admin in outsideSubAdmins"
+					:key="admin.uid"
+					class="gm-mm__outside-admin"
+					:class="{ 'gm-mm__outside-admin--revoking': isPendingRevoke(admin.uid) }">
+					<ShieldAccount :size="14" class="gm-mm__outside-admin-icon" />
+					{{ admin.displayName }}
+					<button v-if="!isPendingRevoke(admin.uid)"
+						type="button"
+						class="gm-mm__outside-admin-revoke"
+						:aria-label="t('group_manager', 'Remove {name} as group admin', { name: admin.displayName })"
+						:title="t('group_manager', 'Remove as group admin')"
+						:disabled="applying"
+						@click="queueRevoke(admin)"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
+				</span>
+			</p>
+
 			<div class="gm-mm__list">
 				<NcNoteCard v-if="loadError" type="error" class="gm-mm__load-error">
 					{{ loadError }}
@@ -171,16 +195,38 @@
 								<span v-if="memberDetailLine(member)" class="gm-mm__row-uid">{{ memberDetailLine(member) }}</span>
 							</span>
 						</span>
+						<span v-if="adminState(member.uid) !== 'none' && !isPendingRemove(member.uid)"
+							class="gm-mm__row-admin"
+							:class="'gm-mm__row-admin--' + adminState(member.uid)"
+							:title="adminStateTitle(member.uid)">
+							<ShieldAccount :size="14" />
+							{{ t('group_manager', 'group admin') }}
+						</span>
 						<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
 							{{ t('group_manager', 'leaving') }}
 						</span>
 						<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
 							{{ t('group_manager', 'disabled') }}
 						</span>
-						<span class="gm-mm__col-spacer" role="cell">
-							<button v-if="!isPendingRemove(member.uid)"
+						<span class="gm-mm__col-actions" role="cell">
+							<button v-if="canToggleAdmin(member)"
 								type="button"
-								class="gm-mm__row-remove"
+								class="gm-mm__row-action gm-mm__row-admin-toggle"
+								:aria-label="willBeAdmin(member.uid)
+									? t('group_manager', 'Remove {name} as group admin', { name: member.displayName })
+									: t('group_manager', 'Make {name} a group admin', { name: member.displayName })"
+								:title="willBeAdmin(member.uid)
+									? t('group_manager', 'Remove as group admin')
+									: t('group_manager', 'Make group admin')"
+								:aria-pressed="willBeAdmin(member.uid) ? 'true' : 'false'"
+								:disabled="applying"
+								@click="toggleAdmin(member)">
+								<ShieldAccount v-if="willBeAdmin(member.uid)" :size="16" />
+								<ShieldAccountOutline v-else :size="16" />
+							</button>
+							<button v-if="canRemove && !isPendingRemove(member.uid)"
+								type="button"
+								class="gm-mm__row-action gm-mm__row-remove"
 								:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
 								:title="t('group_manager', 'Remove from group')"
 								:disabled="applying"
@@ -223,7 +269,7 @@
 </template>
 
 <script>
-import { translate as t } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showInfo } from '@nextcloud/dialogs'
 import { confirmPassword } from '@nextcloud/password-confirmation'
 import '@nextcloud/password-confirmation/style.css'
@@ -236,6 +282,8 @@ import AccountOutline from 'vue-material-design-icons/AccountOutline.vue'
 import AlertCircle from 'vue-material-design-icons/AlertCircle.vue'
 import CheckCircle from 'vue-material-design-icons/CheckCircle.vue'
 import Magnify from 'vue-material-design-icons/Magnify.vue'
+import ShieldAccount from 'vue-material-design-icons/ShieldAccount.vue'
+import ShieldAccountOutline from 'vue-material-design-icons/ShieldAccountOutline.vue'
 import {
 	fetchGroupMembers,
 	searchGroupCandidates,
@@ -243,6 +291,9 @@ import {
 	resolvePastedList,
 	addGroupMember,
 	removeGroupMember,
+	fetchSubAdmins,
+	addSubAdmin,
+	removeSubAdmin,
 } from '../services/api.js'
 import MemberAvatar from './MemberAvatar.vue'
 import { memberDetailLine, memberNameTitle } from '../utils/members.js'
@@ -268,6 +319,8 @@ export default {
 		CheckCircle,
 		Magnify,
 		MemberAvatar,
+		ShieldAccount,
+		ShieldAccountOutline,
 	},
 
 	props: {
@@ -289,6 +342,17 @@ export default {
 		totalMemberCount: {
 			type: Number,
 			default: null,
+		},
+		// What the group's backend allows (GroupService::detail()): an LDAP
+		// group can't gain or lose members here, but its group admins are
+		// still managed in this same list.
+		canAdd: {
+			type: Boolean,
+			default: true,
+		},
+		canRemove: {
+			type: Boolean,
+			default: true,
 		},
 	},
 
@@ -339,6 +403,15 @@ export default {
 			pendingAdd: [],
 			// {uid, displayName, status, error}
 			pendingRemove: [],
+			// Group admin (subadmin) changes, same shape as pendingRemove.
+			pendingGrant: [],
+			pendingRevoke: [],
+
+			// The group's admins as last loaded ({uid, displayName, isMember,
+			// ...}), and whether new ones may be added (never for "admin").
+			subAdmins: [],
+			canGrantSubAdmin: false,
+			subAdminsSeq: 0,
 
 			pasteReview: null,
 
@@ -349,11 +422,21 @@ export default {
 
 	computed: {
 		hasPendingChanges() {
-			return this.pendingAdd.length > 0 || this.pendingRemove.length > 0
+			return this.pendingCount > 0
 		},
 
 		pendingCount() {
-			return this.pendingAdd.length + this.pendingRemove.length
+			return this.pendingAdd.length + this.pendingRemove.length + this.pendingGrant.length + this.pendingRevoke.length
+		},
+
+		subAdminUids() {
+			return new Set(this.subAdmins.map((a) => a.uid))
+		},
+
+		// Admins who aren't in the group (made through the core Users page,
+		// which doesn't require membership) -- they have no row below.
+		outsideSubAdmins() {
+			return this.subAdmins.filter((a) => !a.isMember)
 		},
 
 		flatOptions() {
@@ -409,15 +492,21 @@ export default {
 				hasError: i.status === 'error',
 				error: i.error,
 			}))
-			const removeChips = this.pendingRemove.map((i) => ({
-				key: 'remove-' + i.uid,
-				kind: 'remove',
+			const chip = (kind) => (i) => ({
+				key: kind + '-' + i.uid,
+				kind,
 				uid: i.uid,
 				displayName: i.displayName,
 				hasError: i.status === 'error',
 				error: i.error,
-			}))
-			return [...addChips, ...groupChips, ...removeChips]
+			})
+			return [
+				...addChips,
+				...groupChips,
+				...this.pendingRemove.map(chip('remove')),
+				...this.pendingGrant.map(chip('grant')),
+				...this.pendingRevoke.map(chip('revoke')),
+			]
 		},
 
 		/**
@@ -437,7 +526,7 @@ export default {
 			return this.memberSearch === '' ? this.total : null
 		},
 
-		// Same threshold as GroupMembersList: no filter box for a short list,
+		// No filter box for a short list,
 		// but keep it while a term is typed so the list can be un-filtered.
 		showFilter() {
 			return this.memberSearch !== '' || (this.totalMemberCount ?? this.total ?? 0) >= 10
@@ -460,13 +549,6 @@ export default {
 			return this.effectiveTotal - this.pendingRemove.length + this.pendingAdd.length
 		},
 
-		afterApplyingText() {
-			if (this.effectiveTotal === null) {
-				return t('group_manager', '{count} pending change(s)', { count: this.pendingCount })
-			}
-			return t('group_manager', '{after} after applying', { after: this.afterApplyingCount })
-		},
-
 		pasteReviewSummary() {
 			if (!this.pasteReview) {
 				return ''
@@ -487,6 +569,9 @@ export default {
 			}
 			if (this.lastResult.removedCount > 0) {
 				parts.push(t('group_manager', '{count} removed', { count: this.lastResult.removedCount }))
+			}
+			if (this.lastResult.adminCount > 0) {
+				parts.push(n('group_manager', '%n group admin change', '%n group admin changes', this.lastResult.adminCount))
 			}
 			if (this.lastResult.failed.length > 0) {
 				parts.push(t('group_manager', '{count} failed', { count: this.lastResult.failed.length }))
@@ -536,6 +621,12 @@ export default {
 				count: this.pendingCount,
 				joining: this.pendingAdd.length,
 				leaving: this.pendingRemove.length,
+				admins: this.pendingGrant.length + this.pendingRevoke.length,
+				// Shown by the parent's subtitle (hide-title mode): the count
+				// used to sit left of the add field and shifted it sideways
+				// every time the first change was queued.
+				current: this.effectiveTotal,
+				after: this.effectiveTotal === null ? null : this.afterApplyingCount,
 			})
 		},
 
@@ -546,6 +637,9 @@ export default {
 			this.showDropdown = false
 			this.pendingAdd = []
 			this.pendingRemove = []
+			this.pendingGrant = []
+			this.pendingRevoke = []
+			this.subAdmins = []
 			this.pasteReview = null
 			this.lastResult = null
 		},
@@ -559,7 +653,28 @@ export default {
 			this.memberSearchTimer = setTimeout(() => this.reload(), SEARCH_DEBOUNCE_MS)
 		},
 
+		/**
+		 * Loaded alongside the members but independently of them: a failure
+		 * here only hides the admin badges, it doesn't take the list down.
+		 */
+		async loadSubAdmins() {
+			const seq = ++this.subAdminsSeq
+			try {
+				const data = await fetchSubAdmins(this.groupId)
+				if (seq === this.subAdminsSeq) {
+					this.subAdmins = data.subAdmins
+					this.canGrantSubAdmin = data.canGrant
+				}
+			} catch {
+				if (seq === this.subAdminsSeq) {
+					this.subAdmins = []
+					this.canGrantSubAdmin = false
+				}
+			}
+		},
+
 		async reload() {
+			this.loadSubAdmins()
 			const seq = ++this.membersSeq
 			this.loading = true
 			this.loadError = ''
@@ -918,6 +1033,75 @@ export default {
 				this.pendingAdd = this.pendingAdd.filter((i) => !(i.fromGroup && i.fromGroup.id === chip.groupId))
 			} else if (chip.kind === 'remove') {
 				this.pendingRemove = this.pendingRemove.filter((i) => i.uid !== chip.uid)
+			} else if (chip.kind === 'grant') {
+				this.pendingGrant = this.pendingGrant.filter((i) => i.uid !== chip.uid)
+			} else if (chip.kind === 'revoke') {
+				this.pendingRevoke = this.pendingRevoke.filter((i) => i.uid !== chip.uid)
+			}
+		},
+
+		isPendingGrant(uid) {
+			return this.pendingGrant.some((i) => i.uid === uid)
+		},
+
+		isPendingRevoke(uid) {
+			return this.pendingRevoke.some((i) => i.uid === uid)
+		},
+
+		/**
+		 * 'admin' (is one, nothing queued), 'granting', 'revoking' or 'none'.
+		 */
+		adminState(uid) {
+			if (this.isPendingGrant(uid)) {
+				return 'granting'
+			}
+			if (this.subAdminUids.has(uid)) {
+				return this.isPendingRevoke(uid) ? 'revoking' : 'admin'
+			}
+			return 'none'
+		},
+
+		adminStateTitle(uid) {
+			switch (this.adminState(uid)) {
+			case 'granting':
+				return t('group_manager', 'Becomes a group admin when the changes are applied')
+			case 'revoking':
+				return t('group_manager', 'Stops being a group admin when the changes are applied')
+			default:
+				return t('group_manager', 'Can manage this group\'s members')
+			}
+		},
+
+		willBeAdmin(uid) {
+			const state = this.adminState(uid)
+			return state === 'admin' || state === 'granting'
+		},
+
+		// Granting is never offered on "admin" (canGrantSubAdmin), but an
+		// existing assignment can always be ended.
+		canToggleAdmin(member) {
+			if (this.isPendingRemove(member.uid)) {
+				return false
+			}
+			return this.canGrantSubAdmin || this.subAdminUids.has(member.uid)
+		},
+
+		toggleAdmin(member) {
+			const uid = member.uid
+			if (this.isPendingGrant(uid)) {
+				this.pendingGrant = this.pendingGrant.filter((i) => i.uid !== uid)
+			} else if (this.isPendingRevoke(uid)) {
+				this.pendingRevoke = this.pendingRevoke.filter((i) => i.uid !== uid)
+			} else if (this.subAdminUids.has(uid)) {
+				this.queueRevoke(member)
+			} else {
+				this.pendingGrant.push({ uid, displayName: member.displayName, status: 'pending', error: '' })
+			}
+		},
+
+		queueRevoke(admin) {
+			if (!this.isPendingRevoke(admin.uid)) {
+				this.pendingRevoke.push({ uid: admin.uid, displayName: admin.displayName, status: 'pending', error: '' })
 			}
 		},
 
@@ -929,12 +1113,19 @@ export default {
 			if (this.isPendingRemove(member.uid)) {
 				return
 			}
+			// Leaving the group also ends a group admin assignment (server
+			// side, in the same request), so a queued admin change for this
+			// person has nothing left to do.
+			this.pendingGrant = this.pendingGrant.filter((i) => i.uid !== member.uid)
+			this.pendingRevoke = this.pendingRevoke.filter((i) => i.uid !== member.uid)
 			this.pendingRemove.push({ uid: member.uid, displayName: member.displayName, status: 'pending', error: '' })
 		},
 
 		discardChanges() {
 			this.pendingAdd = []
 			this.pendingRemove = []
+			this.pendingGrant = []
+			this.pendingRevoke = []
 			this.pasteReview = null
 			this.lastResult = null
 		},
@@ -952,10 +1143,14 @@ export default {
 			// queued mid-batch survives instead of being silently discarded.
 			const addSnapshot = [...this.pendingAdd]
 			const removeSnapshot = [...this.pendingRemove]
+			const grantSnapshot = [...this.pendingGrant]
+			const revokeSnapshot = [...this.pendingRevoke]
 
 			const tasks = [
 				...addSnapshot.map((item) => ({ kind: 'add', item })),
 				...removeSnapshot.map((item) => ({ kind: 'remove', item })),
+				...grantSnapshot.map((item) => ({ kind: 'grant', item })),
+				...revokeSnapshot.map((item) => ({ kind: 'revoke', item })),
 			]
 			tasks.forEach(({ item }) => {
 				item.status = 'applying'
@@ -975,10 +1170,17 @@ export default {
 
 			await runWithConcurrency(tasks, APPLY_CONCURRENCY, async ({ kind, item }) => {
 				try {
+					// Grants only ever target existing members (their rows), and
+					// a queued removal drops any admin change for that person,
+					// so no task here depends on another's outcome.
 					if (kind === 'add') {
 						await addGroupMember(this.groupId, item.uid)
-					} else {
+					} else if (kind === 'remove') {
 						await removeGroupMember(this.groupId, item.uid)
+					} else if (kind === 'grant') {
+						await addSubAdmin(this.groupId, item.uid)
+					} else {
+						await removeSubAdmin(this.groupId, item.uid)
 					}
 					item.status = 'done'
 				} catch (err) {
@@ -987,24 +1189,34 @@ export default {
 				}
 			})
 
-			const failedAdd = addSnapshot.filter((i) => i.status === 'error')
-			const failedRemove = removeSnapshot.filter((i) => i.status === 'error')
+			const failed = (list) => list.filter((i) => i.status === 'error')
+			const failedAdd = failed(addSnapshot)
+			const failedRemove = failed(removeSnapshot)
+			const failedGrant = failed(grantSnapshot)
+			const failedRevoke = failed(revokeSnapshot)
 
 			this.lastResult = {
 				addedCount: addSnapshot.length - failedAdd.length,
 				removedCount: removeSnapshot.length - failedRemove.length,
+				adminCount: grantSnapshot.length + revokeSnapshot.length - failedGrant.length - failedRevoke.length,
 				failed: [
 					...failedAdd.map((i) => ({ ...i, action: 'add' })),
 					...failedRemove.map((i) => ({ ...i, action: 'remove' })),
+					...failedGrant.map((i) => ({ ...i, action: 'grant' })),
+					...failedRevoke.map((i) => ({ ...i, action: 'revoke' })),
 				],
 			}
 
 			// Drop only the snapshot's own succeeded/failed items from the live
 			// queue — anything queued after the snapshot was taken is left as-is.
-			const doneAddUids = new Set(addSnapshot.filter((i) => i.status !== 'error').map((i) => i.uid))
-			const doneRemoveUids = new Set(removeSnapshot.filter((i) => i.status !== 'error').map((i) => i.uid))
-			this.pendingAdd = this.pendingAdd.filter((i) => !doneAddUids.has(i.uid))
-			this.pendingRemove = this.pendingRemove.filter((i) => !doneRemoveUids.has(i.uid))
+			const notDone = (snapshot, live) => {
+				const done = new Set(snapshot.filter((i) => i.status !== 'error').map((i) => i.uid))
+				return live.filter((i) => !done.has(i.uid))
+			}
+			this.pendingAdd = notDone(addSnapshot, this.pendingAdd)
+			this.pendingRemove = notDone(removeSnapshot, this.pendingRemove)
+			this.pendingGrant = notDone(grantSnapshot, this.pendingGrant)
+			this.pendingRevoke = notDone(revokeSnapshot, this.pendingRevoke)
 			this.applying = false
 
 			// Emitted before the refresh below, not after: the write above
@@ -1054,10 +1266,18 @@ export default {
 }
 
 .gm-mm__header {
+	/* One explicit height for the add field and the filter's input, so the two
+	   outlines match whatever NcTextField's own sizing does (it is 4px short of
+	   --default-clickable-area: the 1px outline is drawn outside that box). */
+	--gm-field-h: calc(var(--default-clickable-area) - 4px);
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	margin-bottom: 12px;
+}
+
+.gm-mm__search :deep(input) {
+	height: var(--gm-field-h);
 }
 
 .gm-mm__title {
@@ -1092,8 +1312,7 @@ export default {
 	gap: 0;
 	flex: 1 1 0;
 	min-width: 0;
-	/* NcTextField's visible box is 2px short of --default-clickable-area. */
-	height: calc(var(--default-clickable-area) - 2px);
+	height: var(--gm-field-h);
 	padding: 0 12px 0 0;
 	/* Same outline (a box-shadow pair, not a border), height and
 	   icon-to-text distance as NcTextField, so this field and the filter
@@ -1118,7 +1337,11 @@ export default {
 	flex: 1;
 	min-width: 0;
 	padding: 0;
-	height: 100%;
+	/* Nextcloud's global input rule adds a min-height and a 3px margin, which
+	   made this input taller than the box drawn around it. */
+	margin: 0 !important;
+	min-height: 0 !important;
+	height: var(--gm-field-h) !important;
 	border: none;
 	outline: none;
 	background: transparent;
@@ -1238,7 +1461,19 @@ export default {
 	color: var(--color-error-text);
 }
 
+.gm-mm__chip--grant,
+.gm-mm__chip--revoke {
+	background: var(--color-primary-element-light);
+	border-color: var(--color-primary-element-light-hover);
+	color: var(--color-primary-element-light-text);
+}
+
+.gm-mm__chip--revoke .gm-mm__chip-label {
+	text-decoration: line-through;
+}
+
 .gm-mm__chip-prefix {
+	display: inline-flex;
 	font-weight: bold;
 }
 
@@ -1381,10 +1616,12 @@ export default {
 	min-width: 0;
 }
 
-.gm-mm__col-spacer {
-	flex: 0 0 22px;
+.gm-mm__col-actions {
+	flex: 0 0 auto;
+	min-width: 22px;
 	display: flex;
 	justify-content: flex-end;
+	gap: 2px;
 }
 
 .gm-mm__row-avatar {
@@ -1447,10 +1684,9 @@ export default {
 	color: var(--color-error-text);
 }
 
-/* Visible (not hover-gated) so the action is discoverable without a mouse —
-   dim by default, switching to the destructive color on hover/focus so
-   intent stays clear right before the click. */
-.gm-mm__row-remove {
+/* Row actions (group admin toggle, remove): dim, switching color on
+   hover/focus so the intent is clear right before the click. */
+.gm-mm__row-action {
 	width: 22px;
 	height: 22px;
 	min-width: 0;
@@ -1466,26 +1702,118 @@ export default {
 	cursor: pointer;
 }
 
-.gm-mm__row-remove svg {
+.gm-mm__row-action :deep(svg) {
 	display: block;
 }
 
-/* Only on the hovered/focused row: six always-visible crosses weigh as much
-   as the names. Kept reachable by keyboard (focus-within) and on touch
-   screens, which have no hover. */
-.gm-mm__row-remove {
+/* Only on the hovered/focused row: always-visible icons on every row weigh
+   as much as the names. Kept reachable by keyboard (focus-within) and on
+   touch screens, which have no hover. */
+.gm-mm__row-action {
 	opacity: 0;
 }
 
-.gm-mm__row:hover .gm-mm__row-remove,
-.gm-mm__row:focus-within .gm-mm__row-remove {
+.gm-mm__row:hover .gm-mm__row-action,
+.gm-mm__row:focus-within .gm-mm__row-action {
 	opacity: 1;
 }
 
 @media (hover: none) {
-	.gm-mm__row-remove {
+	.gm-mm__row-action {
 		opacity: 1;
 	}
+}
+
+.gm-mm__row-admin-toggle:hover,
+.gm-mm__row-admin-toggle:focus-visible {
+	color: var(--color-primary-element);
+	background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.gm-mm__row-admin-toggle:disabled {
+	opacity: .35;
+	cursor: default;
+}
+
+/* "group admin" next to the name: the queued states (granting, revoking)
+   read as provisional until applied, like a "leaving" row does. */
+.gm-mm__row-admin {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-right: 8px;
+	padding: 1px 8px 1px 6px;
+	border: 1px solid transparent;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.gm-mm__row-admin--granting {
+	background: transparent;
+	border-color: var(--color-primary-element);
+	border-style: dashed;
+	color: var(--color-primary-element);
+}
+
+.gm-mm__row-admin--revoking {
+	background: transparent;
+	border-color: var(--color-border-maxcontrast);
+	border-style: dashed;
+	color: var(--color-text-maxcontrast);
+	text-decoration: line-through;
+}
+
+/* Admins of the group who aren't members have no row of their own. */
+.gm-mm__outside-admins {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+	margin: 0 0 12px;
+	font-size: 13px;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-mm__outside-admin {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--color-main-text);
+}
+
+.gm-mm__outside-admin--revoking {
+	color: var(--color-text-maxcontrast);
+	text-decoration: line-through;
+}
+
+.gm-mm__outside-admin-icon {
+	color: var(--color-primary-element);
+}
+
+.gm-mm__outside-admin-revoke {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	cursor: pointer;
+}
+
+.gm-mm__outside-admin-revoke:hover,
+.gm-mm__outside-admin-revoke:focus-visible {
+	color: var(--color-error-text);
+	background: color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .gm-mm__row-remove:hover,

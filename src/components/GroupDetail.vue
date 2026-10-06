@@ -16,25 +16,27 @@
 			<div class="gm-detail-panel__fixed">
 				<header class="gm-detail__header">
 					<div class="gm-detail__titles">
-						<h2 class="gm-detail__name">
-							<span class="gm-detail__name-text">{{ group.displayName }}</span>
-							<span v-if="group.backend !== 'local'"
-								class="gm-detail__badge"
-								:title="t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.')">
-								{{ t('group_manager', 'LDAP · read-only') }}
-							</span>
-							<NcButton v-if="group.canRename"
-								class="gm-detail__rename"
-								variant="tertiary"
-								:aria-label="t('group_manager', 'Rename group')"
-								:title="t('group_manager', 'Rename group')"
-								@click="showRenameDialog = true">
-								<template #icon>
-									<Pencil :size="16" />
-								</template>
-							</NcButton>
-						</h2>
-						<p v-if="subtitleText" class="gm-detail__subtitle">{{ subtitleText }}</p>
+						<div class="gm-detail__heading">
+							<h2 class="gm-detail__name">
+								<span class="gm-detail__name-text">{{ group.displayName }}</span>
+								<span v-if="group.backend !== 'local'"
+									class="gm-detail__badge"
+									:title="t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.')">
+									{{ t('group_manager', 'LDAP · read-only') }}
+								</span>
+								<NcButton v-if="group.canRename"
+									class="gm-detail__rename"
+									variant="tertiary"
+									:aria-label="t('group_manager', 'Rename group')"
+									:title="t('group_manager', 'Rename group')"
+									@click="showRenameDialog = true">
+									<template #icon>
+										<Pencil :size="16" />
+									</template>
+								</NcButton>
+							</h2>
+							<p v-if="subtitleText" class="gm-detail__subtitle">{{ subtitleText }}</p>
+						</div>
 						<p v-if="group.dn" class="gm-detail__dn">
 							<span class="gm-detail__dn-label">DN</span>
 							<code class="gm-detail__dn-value">{{ group.dn }}</code>
@@ -81,16 +83,18 @@
 			</div>
 
 			<div class="gm-detail-panel__body">
-				<GroupMembersManager v-if="group.canAddUser || group.canRemoveUser"
-					v-show="!showTabs || activeTab === 'members'"
+				<!-- Every group, LDAP included: membership may be read-only, but
+				     group admins are managed here regardless of backend. -->
+				<GroupMembersManager v-show="!showTabs || activeTab === 'members'"
 					ref="membersManager"
 					:group-id="group.id"
 					:hide-title="true"
 					:total-member-count="group.memberCount"
+					:can-add="group.canAddUser"
+					:can-remove="group.canRemoveUser"
 					class="gm-detail__tab-content"
 					@changed="onMembersChanged"
 					@pending-changed="onMembersPendingChanged" />
-				<GroupMembersList v-else v-show="!showTabs || activeTab === 'members'" :group-id="group.id" class="gm-detail__tab-content" />
 
 				<GroupFoldersManager v-if="showTabs"
 					v-show="activeTab === 'folders'"
@@ -152,13 +156,12 @@ import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
-import GroupMembersList from './GroupMembersList.vue'
 import GroupMembersManager from './GroupMembersManager.vue'
 import GroupFoldersManager from './GroupFoldersManager.vue'
 import { fetchGroup, deleteGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 
-const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0 }
+const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0, admins: 0, current: null, after: null }
 
 export default {
 	name: 'GroupDetail',
@@ -174,7 +177,6 @@ export default {
 		Pencil,
 		TrashCanOutline,
 		RenameGroupDialog,
-		GroupMembersList,
 		GroupMembersManager,
 		GroupFoldersManager,
 	},
@@ -213,9 +215,22 @@ export default {
 			if (this.group.backend === 'local') {
 				parts.push(t('group_manager', 'Local group'))
 			}
-			parts.push(this.group.memberCount
-				? n('group_manager', '%n member', '%n members', this.group.memberCount)
-				: t('group_manager', 'no members'))
+			// Only membership changes move the count; queued group admin
+			// changes alone would just repeat it as "N after applying".
+			const membershipChanges = this.membersPending.joining + this.membersPending.leaving
+			if (membershipChanges > 0 && this.membersPending.after !== null) {
+				parts.push(t('group_manager', '{current} members · {after} after applying', {
+					current: this.membersPending.current,
+					after: this.membersPending.after,
+				}))
+			} else {
+				parts.push(this.group.memberCount
+					? n('group_manager', '%n member', '%n members', this.group.memberCount)
+					: t('group_manager', 'no members'))
+			}
+			if (this.group.subAdminCount) {
+				parts.push(n('group_manager', '%n group admin', '%n group admins', this.group.subAdminCount))
+			}
 			if (this.group.disabledCount) {
 				parts.push(n('group_manager', '%n disabled', '%n disabled', this.group.disabledCount))
 			}
@@ -244,11 +259,11 @@ export default {
 		},
 
 		// Only while there is something to apply or an apply is running:
-		// on a read-only group, or with nothing staged, the bar was just
-		// "No pending changes" plus two dead buttons.
+		// with nothing staged, the bar was just "No pending changes" plus two
+		// dead buttons. Every group can stage something now (group admins,
+		// even on a read-only LDAP group), so that is the only condition.
 		showFooter() {
-			return (this.showTabs || this.group?.canAddUser || this.group?.canRemoveUser)
-				&& (this.hasPendingChanges || this.applying)
+			return this.hasPendingChanges || this.applying
 		},
 
 		footerSummaryText() {
@@ -259,6 +274,9 @@ export default {
 				}
 				if (this.membersPending.leaving > 0) {
 					parts.push(t('group_manager', '{count} leaving', { count: this.membersPending.leaving }))
+				}
+				if (this.membersPending.admins > 0) {
+					parts.push(n('group_manager', '%n group admin change', '%n group admin changes', this.membersPending.admins))
 				}
 				return parts.join(' · ')
 			}
@@ -457,7 +475,7 @@ export default {
 	/* +1px: the list's rule is the top border of its scroll area, below its
 	   top region; this one is the last pixel of this box. */
 	height: calc(var(--gm-top-h) + 1px);
-	padding-top: 26px;
+	padding-top: 8px;
 	border-bottom: 1px solid var(--color-border);
 }
 
@@ -531,8 +549,22 @@ export default {
 	white-space: nowrap;
 }
 
+/* Name and subtitle share a baseline; when the subtitle doesn't fit beside a
+   long name it wraps underneath instead of squeezing the name. */
+.gm-detail__heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	column-gap: 12px;
+}
+
+.gm-detail__heading .gm-detail__name {
+	min-width: 0;
+	max-width: 100%;
+}
+
 .gm-detail__subtitle {
-	margin: 2px 0 0;
+	margin: 0;
 	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }

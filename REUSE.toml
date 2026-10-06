@@ -8,9 +8,8 @@ SPDX-PackageDownloadLocation = "https://github.com/kreotropic/group_manager"
 
 # Files that cannot carry an in-file header (JSON has no comment syntax,
 # lock files and binaries are machine-generated/opaque) are annotated here
-# instead, per the REUSE.toml convention (reuse-tool >= 3.0). The currently
-# installed reuse-tool (2.1.0) doesn't read this format yet -- .reuse/dep5
-# is the one actually in effect for now; keep both in sync until upgrading.
+# instead, per the REUSE.toml convention (reuse-tool >= 3.0, which refuses
+# a .reuse/dep5 alongside it).
 
 [[annotations]]
 path = ["package.json", "package-lock.json", "composer.json", "composer.lock"]

@@ -87,6 +87,7 @@ def main(version: str, port: str) -> int:
     print(f"=== NC {version} API check ({base}, run {run}) ===")
     created_users = []
     created_folders = []
+    ldap_admin_granted = False
     try:
         # ---- groups: local and LDAP side by side ---------------------------
         st, d = call("GET", f"{api}/groups")
@@ -222,6 +223,60 @@ def main(version: str, port: str) -> int:
         check("member: remove", st == 200, f"{st} {d}")
         st, d = call("GET", f"{api}/groups/{grp}/members")
         check("member: gone after remove", st == 200 and uids(d.get("members")) == [ua], f"{st} {d}")
+
+        # ---- group admins (Nextcloud subadmins) ----------------------------------
+        def admins(gid):
+            st, d = call("GET", f"{api}/groups/{gid}/subadmins")
+            return st, d, {a["uid"]: a["isMember"] for a in d.get("subAdmins", [])} if st == 200 else {}
+
+        st, d, a = admins(grp)
+        check("group admin: none at first, grantable", st == 200 and a == {} and d.get("canGrant") is True, f"{st} {d}")
+        st, d = call("POST", f"{api}/groups/{grp}/subadmins/{ua}")
+        check("group admin: grant to a member", st == 200 and d.get("uid") == ua and d.get("isMember") is True, f"{st} {d}")
+        st, d, a = admins(grp)
+        check("group admin: listed as a member admin", a == {ua: True}, f"{st} {d}")
+        st, d = call("GET", f"{api}/groups/{grp}")
+        check("group admin: detail subAdminCount", st == 200 and d.get("subAdminCount") == 1, f"{st} {d.get('subAdminCount')}")
+        st, d = call("POST", f"{api}/groups/{grp}/subadmins/{ua}")
+        check("group admin: granting again is a no-op", st == 200, f"{st} {d}")
+        st, d = call("POST", f"{api}/groups/{grp}/subadmins/{ub}")
+        check("group admin: non-member refused (400 NOT_A_MEMBER)",
+              st == 400 and d.get("code") == "NOT_A_MEMBER", f"{st} {d}")
+        st, d = call("POST", f"{api}/groups/{grp}/subadmins/no_such_user_{run}")
+        check("group admin: unknown user is 404", st == 404 and d.get("code") == "USER_NOT_FOUND", f"{st} {d}")
+        st, d = call("POST", f"{api}/groups/admin/subadmins/{ua}")
+        check("group admin: never on the admin group (403)",
+              st == 403 and d.get("code") == "ADMIN_GROUP_PROTECTED", f"{st} {d}")
+        st, d, a = admins("admin")
+        check("group admin: admin group reports canGrant false", st == 200 and d.get("canGrant") is False, f"{st} {d}")
+
+        # Nextcloud itself allows a group admin who isn't a member (the core
+        # Users page / provisioning API); this app lists and can revoke them.
+        st, _ = call("POST", f"{base}/ocs/v1.php/cloud/users/{ub}/subadmins", {"groupid": grp}, form=True)
+        st, d, a = admins(grp)
+        check("group admin: non-member admin (made via core) listed as not a member",
+              a == {ua: True, ub: False}, f"{st} {d}")
+        st, d = call("DELETE", f"{api}/groups/{grp}/subadmins/{ub}")
+        check("group admin: revoke a non-member admin", st == 200, f"{st} {d}")
+        st, d, a = admins(grp)
+        check("group admin: revoked admin gone", a == {ua: True}, f"{st} {d}")
+
+        st, d = call("DELETE", f"{api}/groups/{grp}/members/{ua}")
+        st, d, a = admins(grp)
+        check("group admin: removing the member also ends their admin role", st == 200 and a == {}, f"{st} {d}")
+        st, d = call("POST", f"{api}/groups/{grp}/members", {"uid": ua})
+        check("group admin: (re-add member for the checks below)", st == 200, f"{st} {d}")
+
+        st, d = call("POST", f"{api}/groups/ship_crew/subadmins/fry")
+        ldap_admin_granted = st == 200
+        check("group admin: grant on an LDAP group", ldap_admin_granted and d.get("isMember") is True, f"{st} {d}")
+        st, d, a = admins("ship_crew")
+        check("group admin: listed on the LDAP group", a.get("fry") is True, f"{st} {d}")
+        st, d = call("DELETE", f"{api}/groups/ship_crew/subadmins/fry")
+        st2, d2, a = admins("ship_crew")
+        check("group admin: revoke on an LDAP group", st == 200 and "fry" not in a, f"{st} {d} {d2}")
+        if st == 200:
+            ldap_admin_granted = False
 
         st, d = call("PUT", f"{api}/groups/{grp}", {"displayName": f"Renamed {run}"})
         check("local group: rename", st == 200 and d.get("displayName") == f"Renamed {run}", f"{st} {d}")
@@ -360,6 +415,8 @@ def main(version: str, port: str) -> int:
                       r.returncode == 0 and st == 200 and (d.get("folders") or [{}])[0].get("acl") is True, f"rc={r.returncode} {d}")
     finally:
         # ---- cleanup ---------------------------------------------------------------
+        if ldap_admin_granted:
+            call("DELETE", f"{api}/groups/ship_crew/subadmins/fry")
         for fid in created_folders:
             occ("groupfolders:delete", "-f", str(fid))
         for g in (grp, grp2):

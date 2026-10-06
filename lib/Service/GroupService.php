@@ -315,12 +315,90 @@ class GroupService {
 
         if ($gid === 'admin') {
             $this->removeFromAdminGroupLocked($group, $user);
-            return;
-        }
-
-        if ($group->inGroup($user)) {
+        } elseif ($group->inGroup($user)) {
             $group->removeUser($user);
         }
+
+        // Nextcloud keeps a group admin (subadmin) assignment when the person
+        // leaves the group -- it is only cleaned up when the user or the group
+        // is deleted. Leaving through this app also ends it, so a removed
+        // member doesn't silently keep managing the group they just left.
+        if ($this->subAdmin->isSubAdminOfGroup($user, $group)) {
+            $this->subAdmin->deleteSubAdmin($user, $group);
+        }
+    }
+
+    /**
+     * The group's admins (Nextcloud "subadmins"), members or not: the core
+     * Users page can make anyone a group admin, membership isn't required.
+     *
+     * @return array{subAdmins: list<array{uid: string, displayName: string, email: ?string, enabled: bool, isMember: bool}>, canGrant: bool}
+     */
+    public function getSubAdmins(string $gid): array {
+        $group = $this->requireGroup($gid);
+        $subAdmins = array_map(
+            fn (\OCP\IUser $user) => $this->describeUser($user) + ['isMember' => $group->inGroup($user)],
+            $this->subAdmin->getGroupsSubAdmins($group),
+        );
+        usort($subAdmins, fn (array $a, array $b) => strnatcasecmp($a['displayName'], $b['displayName']));
+
+        return [
+            'subAdmins' => $subAdmins,
+            'canGrant' => $this->canGrantSubAdmin($group),
+        ];
+    }
+
+    /**
+     * Makes a member of $gid one of its group admins. Works for LDAP groups
+     * too: the assignment is stored by Nextcloud, not in the directory.
+     *
+     * @return array{uid: string, displayName: string, email: ?string, enabled: bool, isMember: bool}
+     */
+    public function addSubAdmin(string $gid, string $uid): array {
+        $group = $this->requireGroup($gid);
+        if (!$this->canGrantSubAdmin($group)) {
+            throw new GroupServiceException($this->l->t('The admin group cannot have group admins'), 'ADMIN_GROUP_PROTECTED', 403);
+        }
+        $user = $this->requireUser($uid);
+        if (!$group->inGroup($user)) {
+            throw new GroupServiceException($this->l->t('Only members of the group can be made group admins'), 'NOT_A_MEMBER', 400);
+        }
+
+        if (!$this->subAdmin->isSubAdminOfGroup($user, $group)) {
+            $this->subAdmin->createSubAdmin($user, $group);
+        }
+        return $this->describeUser($user) + ['isMember' => true];
+    }
+
+    /**
+     * Ends a group admin assignment, member or not. Allowed on every group,
+     * "admin" included: an assignment made there some other way is exactly
+     * the kind worth being able to undo.
+     */
+    public function removeSubAdmin(string $gid, string $uid): void {
+        $group = $this->requireGroup($gid);
+        $user = $this->requireUser($uid);
+
+        if ($this->subAdmin->isSubAdminOfGroup($user, $group)) {
+            $this->subAdmin->deleteSubAdmin($user, $group);
+        }
+    }
+
+    /**
+     * A group admin of "admin" could add anyone, themselves included, to
+     * the admin group -- full instance admin rights through the back door.
+     * Nextcloud's own provisioning API refuses it for the same reason.
+     */
+    private function canGrantSubAdmin(IGroup $group): bool {
+        return $group->getGID() !== 'admin';
+    }
+
+    private function requireUser(string $uid): \OCP\IUser {
+        $user = $this->userManager->get($uid);
+        if ($user === null) {
+            throw new GroupServiceException($this->l->t('User not found'), 'USER_NOT_FOUND', 404);
+        }
+        return $user;
     }
 
     /**
@@ -506,6 +584,7 @@ class GroupService {
         return $this->summarize($group) + [
             'disabledCount' => $this->nullableCount($group->countDisabled()),
             'subAdminCount' => count($this->subAdmin->getGroupsSubAdmins($group)),
+            'canGrantSubAdmin' => $this->canGrantSubAdmin($group),
             'canAddUser' => $group->canAddUser(),
             'canRemoveUser' => $group->canRemoveUser(),
             'dn' => $this->resolveLdapDn($group),

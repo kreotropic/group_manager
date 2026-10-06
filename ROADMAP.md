@@ -5,14 +5,14 @@
 
 # Group Manager: Roadmap
 
-## Current state (v0.2.0)
+## Current state (v0.4.0)
 
 The app is feature-complete for its core purpose (browsing groups and
-bulk-editing local membership) and has grown a second major capability,
-group-folder creation and assignment, that was not part of the original
-plan. It now has an automated test suite and CI; it is not yet on the App
-Store; see **Next up** below. Everything in this section is already
-implemented and working:
+bulk-editing local membership) and has grown two capabilities that were not
+part of the original plan: group-folder creation and assignment, and group
+admin (subadmin) management. It has an automated test suite, CI and a
+per-version test matrix (Nextcloud 31–35); 0.4.0 is its first App Store
+release, published 2026-10-03. Everything in this section is already implemented and working:
 
 ### Delivered
 
@@ -31,12 +31,17 @@ implemented and working:
   same dropdown; checkbox multi-select so several matches from one search can
   be queued without reopening it
 - Nothing applies until **Apply**: a colored chip queue (green add / red
-  remove) is the single source of truth for pending changes
+  remove / blue group admin) is the single source of truth for pending
+  changes
 - Batch apply with limited concurrency that never aborts over one failed row;
   failed rows stay queued with their error and a **Try again** that retries
   only those
 - A confirmation guard when switching to a different group with changes still
-  queued
+  queued, Back/Forward included
+- **Group admins** (Nextcloud subadmins): a shield per member row grants or
+  revokes the role through the same queue; admins who aren't members are
+  listed and revocable; removing a member ends their admin role; never on
+  the `admin` group
 
 **Folders tab** (present only when the Team Folders app is installed)
 - **Create a brand-new group folder** directly from this tab (password
@@ -55,14 +60,16 @@ implemented and working:
   applied by surprise from a tab you are not looking at
 
 **LDAP groups**
-- Members are read-only (the directory is the source of truth), with the
-  group's DN shown; Folders stays fully editable
+- Membership is read-only (the directory is the source of truth), with the
+  group's DN shown; group admins and Folders stay fully editable
 - Broken-backend accounts (a demo/test-data artifact, but a real class of
   problem) degrade gracefully: email/enabled-status lookups that throw fall
   back to safe defaults instead of 500ing the whole member list, and rows
   fall back to showing the account's `uid` in place of a missing email
 
 **Accessibility & polish**
+- Theme-safe colours (light, dark, high contrast), a fixed header over
+  scrolling lists, and an optional per-admin top bar shortcut
 - Keyboard navigation (arrows, Enter, Esc) through the add-field dropdown
 - A live region announces group-count changes
 - Custom toggle switches and remove buttons avoid Nextcloud's global
@@ -83,6 +90,10 @@ implemented and working:
 - CI (`.github/workflows/ci.yml`): l10n coverage check, `php -l` + PHPUnit,
   and a frontend build that also verifies the committed `js/` bundle is up
   to date with `src/`
+- A per-version matrix (`build/nc-instance.sh`, Nextcloud 31–35 with Team
+  Folders and a live LDAP directory) running the unit suite, an HTTP API
+  check (`build/api-check.py`) and a real two-process admin-removal race
+  (`build/admin-race-check.sh`); results in `build/README.md`
 
 ## Next up
 
@@ -96,12 +107,6 @@ the platform's own contrast decisions in both light and dark themes, but
 this has not been checked systematically against the 4.5:1 minimum for
 secondary text across every screen and both themes, only spot-checked
 during development.
-
-### 2. App Store publication
-
-Package and sign a release once the above are in a comfortable state. No
-blockers identified so far: `info.xml` already declares the supported
-Nextcloud range and PHP requirement.
 
 ## Post-launch: only if there's traction
 

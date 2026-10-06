@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-04
+
+### Changed
+- App Store screenshot URLs now point at the release's own tag instead of
+  `master`. The App Store's screenshot mirror copies each URL once and never
+  refreshes it, so a new URL per release is the only way updated screenshots
+  reach the listing, and the images always match that version. No code
+  changes.
+
+  This release was made to fix the blank screenshots on the App Store
+  listing, and it can't: they are blank because of a bug in the App Store's
+  screenshot mirror, which serves every recently copied screenshot empty
+  ([usercontent.apps.nextcloud.com#26](https://github.com/nextcloud/usercontent.apps.nextcloud.com/issues/26)).
+
+## [0.4.0] - 2026-10-03
+
 ### Fixed
 - **Opening any group's detail view (local or LDAP) returned HTTP 500 on
   Nextcloud 31** as soon as the Team Folders app (`groupfolders` 19.x) was
@@ -85,6 +101,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   folders for the sidebar, no longer reads every group folder in the
   instance to find the ones assigned to it; both now query the assignment
   table directly for that group.
+- The add field and the "Filter members" field are the same height again: a
+  global Nextcloud input rule made the add field 2px taller, and its outline
+  was clipped at the top.
+- The Folders tab's Write / Share / Delete headers no longer run into each
+  other in Portuguese, Spanish and French: the columns were narrower than the
+  translated words.
 
 ### Known limitations
 - The lock preventing the last-admin race, and the existence checks
@@ -114,8 +136,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   framework's own raw 500 on 34/35.
 
 ### Added
+- **Group admins.** A shield on each member's row makes them an admin of the
+  group (a Nextcloud "subadmin"), queued and applied with the other changes;
+  current admins show a badge, and the group's summary counts them. Works on
+  LDAP groups too, whose membership stays read-only: the assignment is
+  stored by Nextcloud, not in the directory, so LDAP groups now use the same
+  member list as local ones, minus adding and removing. Removing a member
+  also ends their group admin role (Nextcloud itself keeps it until the user
+  or group is deleted). Group admins who aren't members, which the core
+  Users page allows, are listed above the members and can be revoked. The
+  `admin` group can't be given group admins, matching Nextcloud's own
+  provisioning API: a group admin of `admin` could add themselves to it.
 - **Nextcloud 35 support**, verified against a disposable instance the same
   way as 31–34.
+- **Optional top bar shortcut** to the Group Manager page, switched on per
+  admin from the groups list's menu (off by default).
+- **The add field pages through every candidate** as the dropdown scrolls,
+  instead of stopping at the first 10; without a search term, candidates
+  are listed by display name.
+- LDAP groups show a read-only badge and their DN, with a copy button.
+- Groups whose names differ only by case are flagged in the list.
+- Members show their profile picture when they have one.
+
+### Changed
+- Reworked layout: no outer frame, theme-safe colours (light, dark and high
+  contrast), a fixed header over scrolling group and member lists, sticky
+  section headers in the groups list, and one shared header height so the
+  rule under the tabs runs straight across both columns.
+- Tighter header: less padding above the app, the All / Local / LDAP filters
+  on the groups list's title line, a shorter header for every group but an
+  LDAP one (whose DN needs a line of its own), and the group's summary
+  (members, admins, folders, disabled accounts) on the same line as its name.
+- The "N after applying" count moved into that summary, so queuing the first
+  change no longer shifts the add field sideways.
+- Member rows fit on one line (name, then username or email), stacking only
+  in narrow panels; UUID-style usernames are shown as a tooltip instead.
+- Deleting a group moved to an actions menu beside the group's name; the
+  apply/discard footer appears only while changes are pending.
+- Keyboard focus rings show only for keyboard navigation, and Chrome on
+  Windows no longer draws arrow buttons on the app's scrollbars.
 
 ## [0.3.0] - 2026-09-18
 

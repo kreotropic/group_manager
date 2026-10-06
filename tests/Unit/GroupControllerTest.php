@@ -77,6 +77,19 @@ class GroupControllerTest extends TestCase {
         $this->controller->removeMember('research+dev', 'a+b');
     }
 
+    public function testSubAdminRoutesPassGidAndUidThroughWithoutReDecoding(): void {
+        $this->groupService->expects($this->once())
+            ->method('addSubAdmin')
+            ->with('research+dev', 'a+b')
+            ->willReturn([]);
+        $this->groupService->expects($this->once())
+            ->method('removeSubAdmin')
+            ->with('research+dev', 'a+b');
+
+        $this->controller->addSubAdmin('research+dev', 'a+b');
+        $this->controller->removeSubAdmin('research+dev', 'a+b');
+    }
+
     /**
      * @dataProvider passwordConfirmedMethods
      */
@@ -96,6 +109,8 @@ class GroupControllerTest extends TestCase {
             ['destroy'],
             ['addMember'],
             ['removeMember'],
+            ['addSubAdmin'],
+            ['removeSubAdmin'],
         ];
     }
 }

@@ -8,7 +8,7 @@
 			{{ loadError }}
 		</NcNoteCard>
 
-		<div class="gm-layout">
+		<div class="gm-layout" :class="{ 'gm-layout--compact': !selectedIsLdap }">
 			<GroupList :groups="groups"
 				:loading="loading"
 				:selected-id="selectedId"
@@ -94,6 +94,17 @@ export default {
 			announcement: '',
 			quickAccess: false,
 		}
+	},
+
+	computed: {
+		/**
+		 * Only an LDAP group's header has a third line (its DN); every other
+		 * group's title and tabs fit the compact height. The list's origin
+		 * filters sit on its title line, so they don't need the room.
+		 */
+		selectedIsLdap() {
+			return this.groups.some((group) => group.id === this.selectedId && group.backend === 'ldap')
+		},
 	},
 
 	async mounted() {
@@ -316,13 +327,18 @@ export default {
 	/* Height of the top region of BOTH columns (title, search/subtitle,
 	   tabs). Sharing one value keeps the rule under the tabs a single
 	   continuous line across the list and the detail panel. */
-	--gm-top-h: 156px;
+	--gm-top-h: 132px;
 	display: flex;
 	height: calc(100vh - 130px);
 	min-height: 480px;
 	overflow: hidden;
 	position: relative;
 	background: var(--color-main-background);
+}
+
+/* Any group but an LDAP one: no DN line, so title and tabs fit in less. */
+.gm-layout--compact {
+	--gm-top-h: 96px;
 }
 
 .gm-detail {

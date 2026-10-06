@@ -1062,6 +1062,7 @@ export default {
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: .07em;
+	white-space: nowrap;
 	color: var(--color-text-maxcontrast);
 }
 
@@ -1084,6 +1085,9 @@ export default {
 	text-align: right;
 }
 
+/* Wide enough for the longest translated header (COMPARTIR, SUPPRIMER:
+   ~65px in 11px bold caps) with room on both sides; at 62px the three
+   headers ran into each other in pt_PT, es and fr. */
 .gm-fm__col-perm {
 	flex: none;
 	/* Wide enough for the longest header ("PARTILHAR", "ELIMINAR") in

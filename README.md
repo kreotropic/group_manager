@@ -52,10 +52,19 @@ Manager is that screen.
   Nextcloud asks you to confirm your password first, since this creates real
   storage. This works for LDAP groups too: group-folder assignment isn't
   tied to how the group's *members* are managed, only membership is.
+- **Group admins**: the shield on a member's row makes them an admin of that
+  group (a Nextcloud "subadmin", who can then manage its members from the
+  Users page), queued and applied like any other change. Removing a member
+  also ends their group admin role. Admins who aren't members (Nextcloud
+  allows that, from the core Users page) are listed above the members and
+  can be revoked. The `admin` group can't get group admins, as in Nextcloud's
+  own provisioning API: one could add themselves to `admin`.
 - **LDAP groups are read-only where they have to be**: you can't add or
   remove an LDAP group's members here (that's the directory's job), and the
-  panel says so with the group's DN. Everything else (browsing, and folder
-  assignment) works the same as for a local group.
+  panel says so with the group's DN. Everything else (browsing, group admins
+  and folder assignment) works the same as for a local group.
+- **Optional top bar shortcut**: each admin can pin Group Manager to the
+  Nextcloud top bar from the groups list's menu (off by default).
 - **Keyboard-friendly**: arrow keys and Enter drive the add-field dropdown,
   Esc closes it, and switching to a different group while changes are still
   queued asks for confirmation first.
@@ -79,6 +88,10 @@ its **Members** and (if Team Folders is installed) **Folders** tabs appear on
 the right, each with its own add field and a shared **Discard**/**Apply**
 footer at the bottom of the panel.
 
+To make a member a group admin, hover their row and click the shield; the
+change joins the same queue as everything else and is applied with
+**Apply**.
+
 Creating and deleting *groups themselves* (as opposed to editing an existing
 one's membership) is also done from this screen: **Create group** at the
 bottom of the list, **Delete group** in a group's own header.
@@ -90,8 +103,8 @@ bottom of the list, **Delete group** in a group's own header.
   offered, since there is nothing to assign.
 - **LDAP group *membership* cannot be edited here, by design.** LDAP/AD is
   the source of truth for who belongs to a synced group; this app only lets
-  you browse it. Folder access for that same group is a separate, local
-  concept and stays editable.
+  you browse it. Folder access and group admins for that same group are
+  separate, local concepts and stay editable.
 - **Quota is a folder property, not a per-group one.** Changing it from a
   group's Folders tab changes it for every other group that also has access
   to that folder; the UI says this explicitly next to the field.
@@ -155,16 +168,17 @@ Pull requests welcome! Please open an issue first to discuss significant changes
 
 ## Screenshots
 
-| Members (bulk add/remove, chip queue) | Group folders (permissions, quota, ACL badge) |
+| Members (queued changes, group admins) | Group folders (permissions, quota, ACL badge) |
 |---|---|
 | ![Members](screenshots/1-members.png) | ![Folders](screenshots/2-folders.png) |
 
-![LDAP group (read-only members, DN shown)](screenshots/3-ldap.png)
+![LDAP group (read-only members, DN shown, group admin)](screenshots/3-ldap.png)
 
-*The snapshots above show the Members tab mid-edit-free state with the chip
-queue ready to receive changes, the Folders tab with two group folders
-assigned and their permissions, and an LDAP group's read-only member list
-with its directory DN.*
+*The Members tab with three changes queued (one person joining, one
+leaving, one becoming a group admin) and two existing group admins; the
+Folders tab with three folders at different permission levels, one with
+advanced permissions (ACL); and an LDAP group's read-only member list with
+its directory DN and a group admin.*
 
 ## Roadmap
 

@@ -7,6 +7,20 @@
 		<div class="gm-list__top">
 			<div class="gm-list__header">
 				<h2 class="gm-list__title">{{ t('group_manager', 'Groups') }}</h2>
+				<!-- On the title's line, not a row of their own: a third row here
+				     made this column's top region taller than a local group's
+				     header needs, leaving an empty band above the detail tabs. -->
+				<div v-if="hasLdapGroups" class="gm-list__filters" role="group" :aria-label="t('group_manager', 'Filter by origin')">
+					<button v-for="opt in originOptions"
+						:key="opt.value"
+						type="button"
+						class="gm-list__filter"
+						:class="{ 'gm-list__filter--active': origin === opt.value }"
+						:aria-pressed="origin === opt.value"
+						@click="origin = opt.value">
+						{{ opt.label }}
+					</button>
+				</div>
 				<NcActions :aria-label="t('group_manager', 'Options')">
 					<NcActionCheckbox :model-value="quickAccess"
 						@update:model-value="$emit('toggle-quick-access')">
@@ -24,18 +38,6 @@
 					<Magnify :size="16" />
 				</template>
 			</NcTextField>
-
-			<div v-if="hasLdapGroups" class="gm-list__filters" role="group" :aria-label="t('group_manager', 'Filter by origin')">
-				<button v-for="opt in originOptions"
-					:key="opt.value"
-					type="button"
-					class="gm-list__filter"
-					:class="{ 'gm-list__filter--active': origin === opt.value }"
-					:aria-pressed="origin === opt.value"
-					@click="origin = opt.value">
-					{{ opt.label }}
-				</button>
-			</div>
 
 		</div>
 
@@ -298,19 +300,20 @@ export default {
 	z-index: 1;
 }
 
-/* Same 26px top inset and 32px title row as the detail panel's header, so
+/* Same 8px top inset and 32px title row as the detail panel's header, so
    "Groups" and the group's name sit on one line. */
 .gm-list__header {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	gap: 12px;
 	min-height: 32px;
-	padding: 26px 12px 0 20px;
+	padding: 8px 12px 0 20px;
 	box-sizing: content-box;
 	--default-clickable-area: 32px;
 }
 
 .gm-list__title {
+	flex-shrink: 0;
 	margin: 0;
 	font-size: 20px;
 	font-weight: 600;
@@ -323,28 +326,30 @@ export default {
 
 .gm-list__filters {
 	display: flex;
-	gap: 22px;
-	margin-top: auto;
-	padding: 0 20px;
+	gap: 14px;
+	margin-left: auto;
+	min-width: 0;
 }
 
-/* Same type and spacing as the detail panel's Members/Folders tabs. */
+/* Lighter than the detail panel's Members/Folders tabs: these sit on the
+   title's line, so the active one is underlined just under its own text. */
 .gm-list__filters .gm-list__filter {
 	margin: 0;
-	padding: 0 0 10px;
+	min-height: 0;
+	padding: 2px 0;
+	white-space: nowrap;
 	border: none;
 	border-bottom: 2px solid transparent;
 	border-radius: 0;
 	background: transparent;
 	color: var(--color-text-maxcontrast);
 	font-family: inherit;
-	font-size: 14px;
+	font-size: 13px;
 	font-weight: 600;
 	cursor: pointer;
 }
 
 .gm-list__filters .gm-list__filter--active {
-	margin-bottom: -1px;
 	color: var(--color-main-text);
 	border-bottom-color: var(--color-primary-element);
 }

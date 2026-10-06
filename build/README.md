@@ -94,15 +94,15 @@ with the official composer image on first use.
 
 ### Last verified
 
-Run on 2026-09-27 against the fix in `[Unreleased]`:
+Run on 2026-10-03 against 0.4.0 (group admins included):
 
-| NC | PHP | Team Folders | unit | API check |
-|---|---|---|---|---|
-| 31.0.14 | 8.3.30 | 19.1.20 | 58/58 | 48/48 |
-| 32.0.15 | 8.3.35 | 20.1.18 | 58/58 | 48/48 |
-| 33.0.9 | 8.4.26 | 21.0.15 | 58/58 | 48/48 |
-| 34.0.4 | 8.5.10 | 22.0.6 | 58/58 | 48/48 |
-| 35.0.0 | 8.5.10 | 23.0.1 | 58/58 | 48/48 |
+| NC | PHP | Team Folders | unit | API check | admin race |
+|---|---|---|---|---|---|
+| 31.0.14 | 8.3.30 | 19.1.20 | 111/111 | 83/83 | PASS |
+| 32.0.15 | 8.3.35 | 20.1.18 | 111/111 | 83/83 | PASS |
+| 33.0.9 | 8.4.26 | 21.0.15 | 111/111 | 83/83 | PASS |
+| 34.0.4 | 8.5.11 | 22.0.6 | 111/111 | 83/83 | PASS |
+| 35.0.0 | 8.5.10 | 23.0.1 | 111/111 | 83/83 | PASS |
 
 Every instance ran PHP 8.3 or newer (that is all the images ship), so
 nothing here says anything about PHP 8.1, which `info.xml` still declares as
@@ -207,24 +207,63 @@ else lists the offending files and means step 3 signed the wrong tree.
 
 ### 5. Publish
 
-First release only, two one-time steps before the upload:
-1. **Register the app** at apps.nextcloud.com (paste the `.crt` contents,
-   plus a proof-of-possession signature over the literal app id):
-   ```bash
-   echo -n "group_manager" | openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key | openssl base64
-   ```
-2. **Upload the release**: the form also asks for a signature, this time
-   over the tarball's bytes, not the app id:
-   ```bash
-   openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key build/artifacts/group_manager-signed.tar.gz | openssl base64
-   ```
-   This signature is only valid for the exact bytes uploaded; re-generating
-   the tarball afterwards invalidates it.
+The App Store does not take the file itself: its release form asks for a
+public **download URL** and a signature over the bytes behind that URL. A
+GitHub release asset is that URL.
 
-Upload `group_manager-signed.tar.gz` itself at
-<https://apps.nextcloud.com> (account signs in with GitHub). Screenshots come
-from the `<screenshot>` URLs in `info.xml`, served from this repository's
-`raw.githubusercontent.com`, so they must already be pushed.
+1. **Tag and create the GitHub release**, attaching the signed tarball under
+   a versioned name (release notes: the version's `CHANGELOG.md` section):
+   ```bash
+   cp build/artifacts/group_manager-signed.tar.gz build/artifacts/group_manager-vX.Y.Z.tar.gz
+   awk '/^## \[X.Y.Z\]/{f=1;next} /^## \[/{if(f)exit} f' CHANGELOG.md > build/artifacts/release-notes-X.Y.Z.md
+   git tag -a vX.Y.Z -m "Group Manager X.Y.Z"
+   git push origin vX.Y.Z
+   gh release create vX.Y.Z build/artifacts/group_manager-vX.Y.Z.tar.gz \
+       --title "Group Manager X.Y.Z" --notes-file build/artifacts/release-notes-X.Y.Z.md
+   ```
+   Worth checking that the asset GitHub serves is byte-identical to what was
+   signed (`curl -sL <asset url> | cmp - build/artifacts/group_manager-vX.Y.Z.tar.gz`).
+2. **Register the app** (first release only, done for 0.4.0): at
+   <https://apps.nextcloud.com/developer/apps/new> (account signs in with
+   GitHub), paste the `.crt` contents plus a proof-of-possession signature
+   over the literal app id:
+   ```bash
+   echo -n "group_manager" | openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key | openssl base64 -A
+   ```
+3. **Upload the release** at
+   <https://apps.nextcloud.com/developer/apps/releases/new>: the asset's
+   download URL, and a signature over the tarball's bytes (not the app id):
+   ```bash
+   openssl dgst -sha512 -sign ~/.nextcloud/certificates/group_manager.key build/artifacts/group_manager-vX.Y.Z.tar.gz | openssl base64 -A
+   ```
+   This signature is only valid for those exact bytes; re-generating the
+   tarball afterwards invalidates it (and the asset on GitHub with it).
 
-For every release *after* the first, only step 2 (upload) repeats; the
-account/certificate registration is one-time.
+The App Store reads the version, description and screenshots from the
+tarball's `info.xml`; the screenshots are its `<screenshot>` URLs, served
+from this repository's `raw.githubusercontent.com`, so they must already be
+pushed. Since September 2026 neither the store site nor Nextcloud instances
+load those URLs directly: a cron job behind `usercontent.apps.nextcloud.com`
+copies each one once and serves that copy under
+`https://usercontent.apps.nextcloud.com/<base64url of the screenshot URL>`,
+never refreshing a URL it already holds. That is why the URLs point at the
+release tag (`.../group_manager/vX.Y.Z/screenshots/...`) rather than
+`master`: bump them with the version and push the tag (step 1) before
+uploading (step 3), so new screenshots get new URLs and always match the
+version. Re-uploading a release does not make the mirror fetch again.
+
+If the listing shows blank screenshots, check what the mirror holds before
+changing anything here:
+
+```bash
+curl -s "https://usercontent.apps.nextcloud.com/$(printf %s '<screenshot URL>' | base64 -w0 | tr '+/' '-_')" | head -c 16 | xxd
+```
+
+A PNG header means it is fine; `File not found` means it has not been copied
+yet; a 640×360 "Preview not available" PNG means the copy failed (URL
+unreachable, not an image, over 2 MiB). An **empty body** is a mirror-side
+bug: since about July 2026 every newly copied screenshot is served empty, for
+every app (0.4.0 and 0.4.1 both show blank screenshots for this reason), see
+[usercontent.apps.nextcloud.com#26](https://github.com/nextcloud/usercontent.apps.nextcloud.com/issues/26).
+Nothing in the app can fix that. Every release after the first repeats steps
+1 and 3; registration is one-time.
