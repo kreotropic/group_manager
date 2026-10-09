@@ -14,6 +14,8 @@ use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCA\GroupManager\Controller\PreferencesController;
+use OCA\GroupManager\Quota\GetQuotaListener;
+use OCP\User\GetQuotaEvent;
 use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\L10N\IFactory;
@@ -29,6 +31,7 @@ class Application extends App implements IBootstrap {
     }
 
     public function register(IRegistrationContext $context): void {
+        $context->registerEventListener(GetQuotaEvent::class, GetQuotaListener::class);
     }
 
     /**
