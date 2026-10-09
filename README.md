@@ -52,6 +52,15 @@ Manager is that screen.
   Nextcloud asks you to confirm your password first, since this creates real
   storage. This works for LDAP groups too: group-folder assignment isn't
   tied to how the group's *members* are managed, only membership is.
+- **Group quota** (needs the **Group Quota** app): a third tab sets one
+  storage limit shared by every member of the group (their files count
+  against it together), with presets, a custom size, "Unlimited" and a usage
+  bar, staged and applied like any other change. Group Quota applies only
+  one quota per user: a member of several groups that have one follows the
+  **first** of them by group ID, not the smallest or the largest. The tab
+  lists the members for whom another group's quota would take precedence,
+  and names that group, so the conflict is visible before it surprises
+  anyone. Works for LDAP groups too.
 - **Group admins**: the shield on a member's row makes them an admin of that
   group (a Nextcloud "subadmin", who can then manage its members from the
   Users page), queued and applied like any other change. Removing a member

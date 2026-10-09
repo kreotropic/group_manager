@@ -9,6 +9,7 @@ declare(strict_types=1);
 namespace OCA\GroupManager\Tests\Unit;
 
 use OCA\GroupManager\Service\FolderAssignmentService;
+use OCA\GroupManager\Service\GroupQuotaService;
 use OCA\GroupManager\Service\GroupService;
 use OCA\GroupManager\Service\GroupServiceException;
 use OCP\Group\ISubAdmin;
@@ -31,6 +32,7 @@ class GroupServiceTest extends TestCase {
     private ISubAdmin&MockObject $subAdmin;
     private ILDAPProviderFactory&MockObject $ldapProviderFactory;
     private FolderAssignmentService&MockObject $folderAssignmentService;
+    private GroupQuotaService&MockObject $groupQuotaService;
     private IUserSession&MockObject $userSession;
     private IL10N&MockObject $l;
     private ILockingProvider&MockObject $lockingProvider;
@@ -42,6 +44,7 @@ class GroupServiceTest extends TestCase {
         $this->subAdmin = $this->createMock(ISubAdmin::class);
         $this->ldapProviderFactory = $this->createMock(ILDAPProviderFactory::class);
         $this->folderAssignmentService = $this->createMock(FolderAssignmentService::class);
+        $this->groupQuotaService = $this->createMock(GroupQuotaService::class);
         $this->userSession = $this->createMock(IUserSession::class);
         $this->l = $this->createMock(IL10N::class);
         $this->lockingProvider = $this->createMock(ILockingProvider::class);
@@ -49,6 +52,7 @@ class GroupServiceTest extends TestCase {
         $this->ldapProviderFactory->method('isAvailable')->willReturn(false);
         $this->folderAssignmentService->method('isEnabled')->willReturn(false);
         $this->folderAssignmentService->method('folderCount')->willReturn(0);
+        $this->groupQuotaService->method('isEnabled')->willReturn(false);
         $this->subAdmin->method('getGroupsSubAdmins')->willReturn([]);
         // IUserSession::getUser() is nullable, so an unconfigured mock
         // already returns null (no signed-in user) — tests that care about
@@ -63,6 +67,7 @@ class GroupServiceTest extends TestCase {
             $this->subAdmin,
             $this->ldapProviderFactory,
             $this->folderAssignmentService,
+            $this->groupQuotaService,
             $this->userSession,
             $this->l,
             $this->lockingProvider,
@@ -778,6 +783,7 @@ class GroupServiceTest extends TestCase {
             $subAdmin,
             $this->ldapProviderFactory,
             $this->folderAssignmentService,
+            $this->groupQuotaService,
             $this->userSession,
             $this->l,
             $this->lockingProvider,

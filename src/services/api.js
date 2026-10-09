@@ -224,6 +224,24 @@ export async function setGroupFolderQuota(gid, folderId, quota) {
 }
 
 /**
+ * A group's groupquota limit (bytes, null = no limit), its current usage
+ * (null when it can't be computed) and which members would be governed by
+ * another group's quota instead.
+ */
+export async function fetchGroupQuota(gid) {
+	const { data } = await axios.get(base('/api/groups/' + encodeURIComponent(gid) + '/quota'))
+	return data
+}
+
+/**
+ * Set a group's limit in bytes; a negative value (-3) removes it.
+ */
+export async function setGroupQuota(gid, quota) {
+	const { data } = await axios.put(base('/api/groups/' + encodeURIComponent(gid) + '/quota'), { quota })
+	return data
+}
+
+/**
  * Whether this admin has the top-bar shortcut enabled.
  */
 export async function fetchQuickAccess() {

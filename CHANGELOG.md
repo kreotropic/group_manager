@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+- **Quota tab** (when the Group Quota app is enabled): view, set and remove
+  a group's shared storage limit from the group's detail view, with presets,
+  a custom size, "Unlimited" and a usage bar. Setting a quota asks for a
+  password confirmation like the other write actions.
+- A warning on that tab for members who also belong to another group with a
+  quota. Group Quota applies only the first such group by group ID to a user
+  in several (its README calls the case undefined), and the warning names the
+  group that would actually win.
+
 ## [0.4.1] - 2026-10-04
 
 ### Changed

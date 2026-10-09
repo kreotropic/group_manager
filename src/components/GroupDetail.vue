@@ -72,12 +72,21 @@
 						<span class="gm-detail__tab-label">{{ t('group_manager', 'Members') }}</span>
 						<span v-if="showMembersDot" class="gm-detail__tab-dot" />
 					</button>
-					<button type="button"
+					<button v-if="showFoldersTab"
+						type="button"
 						class="gm-detail__tab"
 						:class="{ 'gm-detail__tab--active': activeTab === 'folders' }"
 						@click="activeTab = 'folders'">
 						<span class="gm-detail__tab-label">{{ t('group_manager', 'Folders') }}</span>
 						<span v-if="showFoldersDot" class="gm-detail__tab-dot" />
+					</button>
+					<button v-if="showQuotaTab"
+						type="button"
+						class="gm-detail__tab"
+						:class="{ 'gm-detail__tab--active': activeTab === 'quota' }"
+						@click="activeTab = 'quota'">
+						<span class="gm-detail__tab-label">{{ t('group_manager', 'Quota') }}</span>
+						<span v-if="showQuotaDot" class="gm-detail__tab-dot" />
 					</button>
 				</nav>
 			</div>
@@ -96,13 +105,21 @@
 					@changed="onMembersChanged"
 					@pending-changed="onMembersPendingChanged" />
 
-				<GroupFoldersManager v-if="showTabs"
+				<GroupFoldersManager v-if="showFoldersTab"
 					v-show="activeTab === 'folders'"
 					ref="foldersManager"
 					:group-id="group.id"
 					class="gm-detail__tab-content"
 					@changed="onFoldersChanged"
 					@pending-changed="onFoldersPendingChanged" />
+
+				<GroupQuotaManager v-if="showQuotaTab"
+					v-show="activeTab === 'quota'"
+					ref="quotaManager"
+					:group-id="group.id"
+					class="gm-detail__tab-content"
+					@changed="onQuotaChanged"
+					@pending-changed="onQuotaPendingChanged" />
 			</div>
 
 			<div v-if="showFooter" class="gm-detail-panel__footer">
@@ -158,8 +175,10 @@ import Pencil from 'vue-material-design-icons/Pencil.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
 import GroupMembersManager from './GroupMembersManager.vue'
 import GroupFoldersManager from './GroupFoldersManager.vue'
+import GroupQuotaManager from './GroupQuotaManager.vue'
 import { fetchGroup, deleteGroup } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
+import { humanSize } from '../utils/format.js'
 
 const EMPTY_PENDING = { hasPendingChanges: false, count: 0, joining: 0, leaving: 0, admins: 0, current: null, after: null }
 
@@ -179,6 +198,7 @@ export default {
 		RenameGroupDialog,
 		GroupMembersManager,
 		GroupFoldersManager,
+		GroupQuotaManager,
 	},
 
 	props: {
@@ -201,6 +221,7 @@ export default {
 			activeTab: 'members',
 			membersPending: { ...EMPTY_PENDING },
 			foldersPending: { ...EMPTY_PENDING },
+			quotaPending: { ...EMPTY_PENDING },
 			applying: false,
 		}
 	},
@@ -239,11 +260,25 @@ export default {
 					? n('group_manager', '%n folder', '%n folders', this.group.folderCount)
 					: t('group_manager', 'no folders'))
 			}
+			if (this.group.quotaEnabled) {
+				parts.push(this.group.quota === null || this.group.quota === undefined
+					? t('group_manager', 'no quota')
+					: t('group_manager', 'quota {size}', { size: humanSize(this.group.quota) }))
+			}
 			return parts.join(' · ')
 		},
 
-		showTabs() {
+		showFoldersTab() {
 			return !!this.group?.foldersEnabled
+		},
+
+		showQuotaTab() {
+			return !!this.group?.quotaEnabled
+		},
+
+		// The tab bar only exists when there is more than Members to show.
+		showTabs() {
+			return this.showFoldersTab || this.showQuotaTab
 		},
 
 		showMembersDot() {
@@ -251,11 +286,17 @@ export default {
 		},
 
 		showFoldersDot() {
-			return this.showTabs && this.activeTab !== 'folders' && this.foldersPending.hasPendingChanges
+			return this.showFoldersTab && this.activeTab !== 'folders' && this.foldersPending.hasPendingChanges
+		},
+
+		showQuotaDot() {
+			return this.showQuotaTab && this.activeTab !== 'quota' && this.quotaPending.hasPendingChanges
 		},
 
 		hasPendingChanges() {
-			return this.membersPending.hasPendingChanges || this.foldersPending.hasPendingChanges
+			return this.membersPending.hasPendingChanges
+				|| this.foldersPending.hasPendingChanges
+				|| this.quotaPending.hasPendingChanges
 		},
 
 		// Only while there is something to apply or an apply is running:
@@ -283,10 +324,18 @@ export default {
 			const membersText = this.membersPending.count > 0
 				? n('group_manager', '%n change in Members', '%n changes in Members', this.membersPending.count)
 				: t('group_manager', 'none in Members')
-			const foldersText = this.foldersPending.count > 0
-				? n('group_manager', '%n change in Folders', '%n changes in Folders', this.foldersPending.count)
-				: t('group_manager', 'none in Folders')
-			return membersText + ' · ' + foldersText
+			const parts = [membersText]
+			if (this.showFoldersTab) {
+				parts.push(this.foldersPending.count > 0
+					? n('group_manager', '%n change in Folders', '%n changes in Folders', this.foldersPending.count)
+					: t('group_manager', 'none in Folders'))
+			}
+			if (this.showQuotaTab) {
+				parts.push(this.quotaPending.count > 0
+					? t('group_manager', 'quota change')
+					: t('group_manager', 'none in Quota'))
+			}
+			return parts.join(' · ')
 		},
 
 		deleteWarning() {
@@ -382,6 +431,15 @@ export default {
 			}
 		},
 
+		async onQuotaChanged() {
+			await this.refreshGroup()
+		},
+
+		onQuotaPendingChanged(payload) {
+			this.quotaPending = payload
+			this.emitPendingState()
+		},
+
 		onMembersPendingChanged(payload) {
 			this.membersPending = payload
 			this.emitPendingState()
@@ -406,6 +464,7 @@ export default {
 		discardAll() {
 			this.$refs.membersManager?.discardChanges()
 			this.$refs.foldersManager?.discardChanges()
+			this.$refs.quotaManager?.discardChanges()
 		},
 
 		async applyAll() {
@@ -417,6 +476,9 @@ export default {
 				}
 				if (this.foldersPending.hasPendingChanges && this.$refs.foldersManager) {
 					tasks.push(this.$refs.foldersManager.applyChanges())
+				}
+				if (this.quotaPending.hasPendingChanges && this.$refs.quotaManager) {
+					tasks.push(this.$refs.quotaManager.applyChanges())
 				}
 				await Promise.all(tasks)
 			} finally {

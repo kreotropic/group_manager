@@ -21,6 +21,8 @@ folders and their per-group permissions and quota, without leaving Settings.
 - Create a new group folder or assign an existing one to a group, edit Write/Share/Delete
   permissions and the folder's quota, and see a badge when a folder has advanced permissions
   (ACL) enabled — works for LDAP groups too.
+- When the Group Quota app is installed, view and set a group's shared storage limit, with a
+  warning for members who belong to several groups that have a quota.
 - LDAP group membership stays read-only, as the directory is the source of truth; everything else,
   group admins included, works the same as for a local group.
     ]]></description>

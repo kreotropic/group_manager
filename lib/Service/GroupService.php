@@ -59,6 +59,7 @@ class GroupService {
         private ISubAdmin $subAdmin,
         private ILDAPProviderFactory $ldapProviderFactory,
         private FolderAssignmentService $folderAssignmentService,
+        private GroupQuotaService $groupQuotaService,
         private IUserSession $userSession,
         private IL10N $l,
         private ILockingProvider $lockingProvider,
@@ -581,6 +582,7 @@ class GroupService {
     }
 
     private function detail(IGroup $group): array {
+        $quotaEnabled = $this->groupQuotaService->isEnabled();
         return $this->summarize($group) + [
             'disabledCount' => $this->nullableCount($group->countDisabled()),
             'subAdminCount' => count($this->subAdmin->getGroupsSubAdmins($group)),
@@ -590,6 +592,8 @@ class GroupService {
             'dn' => $this->resolveLdapDn($group),
             'foldersEnabled' => $this->folderAssignmentService->isEnabled(),
             'folderCount' => $this->folderAssignmentService->folderCount($group->getGID()),
+            'quotaEnabled' => $quotaEnabled,
+            'quota' => $quotaEnabled ? $this->groupQuotaService->quotaOf($group->getGID()) : null,
         ];
     }
 
