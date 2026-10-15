@@ -5,12 +5,12 @@
 
 # Group Manager: Roadmap
 
-## Current state (v0.4.0)
+## Current state (v0.5.0)
 
 The app is feature-complete for its core purpose (browsing groups and
 bulk-editing local membership) and has grown two capabilities that were not
-part of the original plan: group-folder creation and assignment, and group
-admin (subadmin) management. It has an automated test suite, CI and a
+part of the original plan: group-folder creation and assignment, group
+admin (subadmin) management, and group quotas through the Group Quota app. It has an automated test suite, CI and a
 per-version test matrix (Nextcloud 31–35); 0.4.0 is its first App Store
 release, published 2026-10-03. Everything in this section is already implemented and working:
 
@@ -47,6 +47,9 @@ release, published 2026-10-03. Everything in this section is already implemented
 - **Create a brand-new group folder** directly from this tab (password
   confirmation required, since it provisions real storage), assigned to the
   current group immediately, or assign/unassign an existing one
+- The create dialog takes a full path (`a/b/c`) with a browsable tree of the
+  levels that already exist, a live preview of how the folder appears in
+  Files, and warnings when the path exists or nests inside another folder
 - Per-group **Write / Share / Delete** switches (read is always implied,
   never a fourth switch)
 - Folder quota shown and **editable** from here, with an explicit note that
@@ -58,6 +61,17 @@ release, published 2026-10-03. Everything in this section is already implemented
 - Same chip-queue / batch-apply / never-abort model as Members, sharing one
   combined footer and Apply button with the Members tab so nothing gets
   applied by surprise from a tab you are not looking at
+
+**Quota tab** (present only when the Group Quota app is enabled)
+- View, set and remove a group's shared storage limit, with presets, a
+  custom size, "Unlimited" and a usage bar; writes need password
+  confirmation
+- Warns about members who also belong to another group with a quota, and
+  names the group whose limit actually applies to them (Group Quota uses the
+  first such group in the order Nextcloud lists the user's groups, which
+  depends on the database; its own README calls the case undefined)
+- Group Quota does the enforcing; this tab reads and writes the same
+  `quota_<gid>` app setting its storage wrapper and occ commands use
 
 **LDAP groups**
 - Membership is read-only (the directory is the source of truth), with the
@@ -99,7 +113,26 @@ release, published 2026-10-03. Everything in this section is already implemented
 
 Roughly in priority order:
 
-### 1. Accessibility contrast audit
+### 1. Drop a group's quota when the group is deleted
+
+Deleting a group leaves its `quota_<gid>` setting behind (neither this app
+nor Group Quota listens for group deletion), so a new group created later
+with the same ID silently inherits the old limit. A `GroupDeletedEvent`
+listener that removes the key would close it for deletions made anywhere,
+not only from this app.
+
+### 2. Native group quota enforcement
+
+A spike (branch `spike/native-group-quota`) enforces group quotas through
+core's public `GetQuotaEvent` instead of Group Quota's storage wrapper:
+a shared pool per group, a defined rule for users in several groups
+(strictest or most permissive, instead of "first in whatever order the database returns"), and no
+dependency on another app. It passed its acceptance checks but still needs
+its own table and migration, a settings switch, an import from Group
+Quota's settings, deletion cleanup and checks on Nextcloud 31–34 and with
+LDAP before it can ship.
+
+### 3. Accessibility contrast audit
 
 The redesigned UI (chip queue, tabs, the folders table) was built against
 Nextcloud's `--color-*` custom properties throughout, which should track

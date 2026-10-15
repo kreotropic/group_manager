@@ -94,15 +94,24 @@ with the official composer image on first use.
 
 ### Last verified
 
-Run on 2026-10-03 against 0.4.0 (group admins included):
+Run on 2026-10-15 against 0.5.0 (Quota tab included; Group Quota installed
+from the App Store on every version):
 
-| NC | PHP | Team Folders | unit | API check | admin race |
-|---|---|---|---|---|---|
-| 31.0.14 | 8.3.30 | 19.1.20 | 111/111 | 83/83 | PASS |
-| 32.0.15 | 8.3.35 | 20.1.18 | 111/111 | 83/83 | PASS |
-| 33.0.9 | 8.4.26 | 21.0.15 | 111/111 | 83/83 | PASS |
-| 34.0.4 | 8.5.11 | 22.0.6 | 111/111 | 83/83 | PASS |
-| 35.0.0 | 8.5.10 | 23.0.1 | 111/111 | 83/83 | PASS |
+| NC | PHP | Team Folders | Group Quota | unit | API check | admin race |
+|---|---|---|---|---|---|---|
+| 31.0.14 | 8.3.30 | 19.1.20 | 0.2.5 | 129/129 | 90/90 | not run |
+| 32.0.15 | 8.3.35 | 20.1.19 | 0.2.5 | 129/129 | 90/90 | not run |
+| 33.0.3 | 8.4.21 | 21.0.15 | 0.2.6 | 129/129 | 90/90 | not run |
+| 34.0.4 | 8.5.11 | 22.0.6 | 0.2.6 | 129/129 | 90/90 | not run |
+| 35.0.0 | 8.5.10 | 23.0.1 | 0.2.6 | 129/129 | 90/90 | not run |
+
+The previous run (2026-10-03, 0.4.0: 111 unit, 83 API checks) also ran
+`admin-race-check.sh`, PASS on every version; nothing in 0.5.0 touches the
+group-admin paths it exercises.
+
+All instances use SQLite, where Nextcloud lists a user's groups in the order
+they joined, not alphabetically as on MySQL/MariaDB; the quota overlap check
+is written to hold for either order.
 
 Every instance ran PHP 8.3 or newer (that is all the images ship), so
 nothing here says anything about PHP 8.1, which `info.xml` still declares as

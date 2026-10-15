@@ -14,7 +14,7 @@ group membership, and, when the Team Folders app is installed, create or
 assign group folders and their per-group permissions and quota, without
 leaving Settings.
 
-![Members](screenshots/1-members.png)
+![Members](screenshots/1-members-0.5.0.png)
 
 ## Problem Solved
 
@@ -57,7 +57,9 @@ Manager is that screen.
   against it together), with presets, a custom size, "Unlimited" and a usage
   bar, staged and applied like any other change. Group Quota applies only
   one quota per user: a member of several groups that have one follows the
-  **first** of them by group ID, not the smallest or the largest. The tab
+  **first** of them in the order Nextcloud lists the user's groups, not the
+  smallest or the largest (on MySQL/MariaDB that is alphabetical by group
+  ID; on SQLite and PostgreSQL it is usually the order the user joined). The tab
   lists the members for whom another group's quota would take precedence,
   and names that group, so the conflict is visible before it surprises
   anyone. Works for LDAP groups too.
@@ -179,19 +181,25 @@ Pull requests welcome! Please open an issue first to discuss significant changes
 
 | Members (queued changes, group admins) | Group folders (permissions, quota, ACL badge) |
 |---|---|
-| ![Members](screenshots/1-members.png) | ![Folders](screenshots/2-folders.png) |
+| ![Members](screenshots/1-members-0.5.0.png) | ![Folders](screenshots/2-folders-0.5.0.png) |
 
-![LDAP group (read-only members, DN shown, group admin)](screenshots/3-ldap.png)
+| Group quota (usage, presets, overlap warning) | Creating a group folder from a path |
+|---|---|
+| ![Quota](screenshots/4-quota-0.5.0.png) | ![Folder path](screenshots/5-folder-path-0.5.0.png) |
+
+![LDAP group (read-only members, DN shown, group admin)](screenshots/3-ldap-0.5.0.png)
 
 *The Members tab with three changes queued (one person joining, one
 leaving, one becoming a group admin) and two existing group admins; the
 Folders tab with three folders at different permission levels, one with
-advanced permissions (ACL); and an LDAP group's read-only member list with
-its directory DN and a group admin.*
+advanced permissions (ACL); the Quota tab with a 50 GB limit, its usage and
+the members whose quota comes from another group; the create dialog with a
+nested path, its preview in Files and the existing folders; and an LDAP
+group's read-only member list with its directory DN and a group admin.*
 
 ## Roadmap
 
-Planned work (accessibility contrast pass, App Store publication, and more)
+Planned work (dropping a deleted group's quota, native group quota enforcement, an accessibility contrast pass, and more)
 is documented in [ROADMAP.md](ROADMAP.md).
 
 ## Changelog
