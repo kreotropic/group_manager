@@ -151,6 +151,15 @@ up() {
     fi
     occ app:enable groupfolders > /dev/null 2>&1 || true
 
+    # Group Quota, same reasoning: the Quota tab only exists when it is enabled,
+    # and the App Store has no release of it for every Nextcloud we support.
+    out="$(occ app:install groupquota 2>&1)" || true
+    echo "$out"
+    if ! grep -qE 'installed' <<< "$out"; then
+        echo "WARNING: groupquota is not installable on NC $v -- the Quota tab cannot be tested" >&2
+    fi
+    occ app:enable groupquota > /dev/null 2>&1 || true
+
     # LDAP: user_ldap pointed at the Planet Express test directory (hosts
     # ship_crew, admin_staff, ... under dc=planetexpress,dc=com).
     occ app:enable user_ldap > /dev/null 2>&1 || true

@@ -87,6 +87,7 @@ def main(version: str, port: str) -> int:
     print(f"=== NC {version} API check ({base}, run {run}) ===")
     created_users = []
     created_folders = []
+    quota_groups = []
     ldap_admin_granted = False
     try:
         # ---- groups: local and LDAP side by side ---------------------------
@@ -413,12 +414,64 @@ def main(version: str, port: str) -> int:
                 st, d = call("GET", f"{api}/groups/{grp}/folders")
                 check("folders: ACL flag follows advanced permissions",
                       r.returncode == 0 and st == 200 and (d.get("folders") or [{}])[0].get("acl") is True, f"rc={r.returncode} {d}")
+
+        # ---- Group Quota -----------------------------------------------------------
+        # The limit lives in groupquota's own appconfig (quota_<gid>), which is what
+        # its storage wrapper enforces, so that is what gets checked behind the API.
+        quota_names = ("read", "set", "persisted for groupquota", "zero rejected",
+                       "nonexistent group", "overlap names the winning group", "remove")
+        st, d = call("GET", f"{api}/groups/{grp}")
+        if st != 200:
+            for n in quota_names:
+                skip(f"quota: {n}", "group detail did not load (see the failure above)")
+        elif d.get("quotaEnabled") is not True:
+            st, d = call("GET", f"{api}/groups/{grp}/quota")
+            check("quota: API answers 404 GROUPQUOTA_DISABLED without the app",
+                  st == 404 and d.get("code") == "GROUPQUOTA_DISABLED", f"{st} {d}")
+            for n in quota_names:
+                skip(f"quota: {n}", "Group Quota not enabled on this instance")
+        else:
+            gib = 1073741824
+            quota_groups.extend([grp, grp2])
+            st, d = call("GET", f"{api}/groups/{grp}/quota")
+            check("quota: read (none yet)", st == 200 and d.get("quota") is None and "overlap" in d, f"{st} {d}")
+            st, d = call("PUT", f"{api}/groups/{grp}/quota", {"quota": gib})
+            check("quota: set 1 GiB", st == 200 and d.get("quota") == gib, f"{st} {d}")
+            stored = occ("config:app:get", "groupquota", f"quota_{grp}").stdout.strip()
+            check("quota: persisted for groupquota", stored == str(gib), stored)
+            st, d = call("PUT", f"{api}/groups/{grp}/quota", {"quota": 0})
+            check("quota: zero rejected (400 INVALID_QUOTA)", st == 400 and d.get("code") == "INVALID_QUOTA", f"{st} {d}")
+            st, d = call("PUT", f"{api}/groups/gmchk_ghost_{run}/quota", {"quota": gib})
+            check("quota: nonexistent group is 404", st == 404 and d.get("code") == "GROUP_NOT_FOUND", f"{st} {d}")
+
+            # groupquota gives a user in several limited groups the quota of the
+            # first one in getUserGroupIds() order, which has no ORDER BY behind
+            # it (alphabetical on MySQL/MariaDB, join order on SQLite/PostgreSQL),
+            # so don't predict the winner: with ua in both groups, exactly one
+            # group's view must warn, naming the other one as the winner.
+            call("POST", f"{api}/groups", {"gid": grp2})
+            call("POST", f"{api}/groups/{grp2}/members", {"uid": ua})
+            call("PUT", f"{api}/groups/{grp2}/quota", {"quota": 2 * gib})
+            views = {}
+            for g in (grp, grp2):
+                st, d = call("GET", f"{api}/groups/{g}/quota")
+                views[g] = [(u.get("uid"), u.get("winner")) for u in ((d.get("overlap") or {}).get("users") or [])] if st == 200 else None
+            check("quota: overlap names the winning group",
+                  views in ({grp: [(ua, grp2)], grp2: []}, {grp: [], grp2: [(ua, grp)]}), str(views))
+
+            st, d = call("DELETE", f"{api}/groups/{grp}/quota")
+            stored = occ("config:app:get", "groupquota", f"quota_{grp}")
+            check("quota: remove", st == 200 and stored.returncode != 0, f"{st} {d} rc={stored.returncode}")
     finally:
         # ---- cleanup ---------------------------------------------------------------
         if ldap_admin_granted:
             call("DELETE", f"{api}/groups/ship_crew/subadmins/fry")
         for fid in created_folders:
             occ("groupfolders:delete", "-f", str(fid))
+        # Deleting a group does not remove its groupquota key (neither app
+        # listens for that), so drop them explicitly.
+        for g in quota_groups:
+            occ("config:app:delete", "groupquota", f"quota_{g}")
         for g in (grp, grp2):
             call("DELETE", f"{api}/groups/{g}")
         for u in created_users:

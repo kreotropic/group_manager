@@ -35,7 +35,7 @@
 									</template>
 								</NcButton>
 							</h2>
-							<p v-if="subtitleText" class="gm-detail__subtitle">{{ subtitleText }}</p>
+							<p v-if="subtitleText" class="gm-detail__subtitle" :title="subtitleText">{{ subtitleText }}</p>
 						</div>
 						<p v-if="group.dn" class="gm-detail__dn">
 							<span class="gm-detail__dn-label">DN</span>
@@ -611,22 +611,31 @@ export default {
 	white-space: nowrap;
 }
 
-/* Name and subtitle share a baseline; when the subtitle doesn't fit beside a
-   long name it wraps underneath instead of squeezing the name. */
+/* Name and subtitle share one line and a baseline. The top region has a fixed
+   height (--gm-top-h, shared with the group list so the rule under the tabs is
+   one continuous line), so a subtitle that wrapped underneath pushed the tabs
+   against it; it is cut with an ellipsis instead, full text on hover. The
+   name keeps priority: the subtitle gives way first. */
 .gm-detail__heading {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: baseline;
 	column-gap: 12px;
+	min-width: 0;
 }
 
 .gm-detail__heading .gm-detail__name {
+	flex: 0 1 auto;
 	min-width: 0;
 	max-width: 100%;
 }
 
 .gm-detail__subtitle {
+	flex: 1 1 0;
+	min-width: 0;
 	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }

@@ -5,7 +5,7 @@ OC.L10N.register(
     "A group folder with this name already exists" : "A group folder with this name already exists",
     "A group folder with this path already exists." : "A group folder with this path already exists.",
     "A group with this ID already exists" : "A group with this ID already exists",
-    "A member of several groups that have a quota follows only the first of them by group ID." : "A member of several groups that have a quota follows only the first of them by group ID.",
+    "A member of several groups that have a quota follows only one of them, chosen by the order Nextcloud lists their groups in, not by the size of the limit." : "A member of several groups that have a quota follows only one of them, chosen by the order Nextcloud lists their groups in, not by the size of the limit.",
     "A pasted entry is too long" : "A pasted entry is too long",
     "A quota must be greater than zero. Remove it to leave the group without a limit." : "A quota must be greater than zero. Remove it to leave the group without a limit.",
     "ACL" : "ACL",

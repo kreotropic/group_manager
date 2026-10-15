@@ -33,11 +33,15 @@ use OCP\Server;
  * best-effort.
  *
  * groupquota applies, to a user in several groups that have a quota, the
- * quota of the FIRST such group in IGroupManager::getUserGroupIds() order
- * (alphabetical by group id on the database backend) — not the lowest, not
- * the highest, and the app's own README calls the case "undefined".
- * overlapFor() reproduces exactly that rule, so the warning the UI shows
- * names the group that really wins.
+ * quota of the FIRST such group in IGroupManager::getUserGroupIds() order:
+ * not the lowest, not the highest, and the app's own README calls the case
+ * "undefined". That order is not defined either: the database backend's
+ * query has no ORDER BY, so MySQL/MariaDB happen to return group ids
+ * alphabetically (they come off the primary key) while SQLite and PostgreSQL
+ * usually return them in the order the memberships were created, with other
+ * backends (LDAP) after the database ones. overlapFor() calls that same
+ * method instead of assuming any of these, so the warning the UI shows names
+ * the group that really wins on this instance.
  */
 class GroupQuotaService {
     private const APP = 'groupquota';

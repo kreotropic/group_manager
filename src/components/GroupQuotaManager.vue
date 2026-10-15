@@ -92,7 +92,7 @@
 
 				<p class="gm-gq__note">
 					{{ t('group_manager', 'The limit is shared: the files of every member count against it together.') }}
-					{{ t('group_manager', 'A member of several groups that have a quota follows only the first of them by group ID.') }}
+					{{ t('group_manager', 'A member of several groups that have a quota follows only one of them, chosen by the order Nextcloud lists their groups in, not by the size of the limit.') }}
 				</p>
 			</template>
 		</div>
@@ -433,7 +433,6 @@ export default {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	margin-left: 8px;
 }
 
 .gm-gq__custom-input {

@@ -4,7 +4,7 @@
         "A group folder with this name already exists": "Já existe uma pasta de grupo com este nome",
         "A group folder with this path already exists.": "Já existe uma pasta de grupo com este caminho.",
         "A group with this ID already exists": "Já existe um grupo com este ID",
-        "A member of several groups that have a quota follows only the first of them by group ID.": "Um membro de vários grupos com quota segue apenas o primeiro deles, por ID do grupo.",
+        "A member of several groups that have a quota follows only one of them, chosen by the order Nextcloud lists their groups in, not by the size of the limit.": "Um membro de vários grupos com quota segue apenas um deles, escolhido pela ordem em que o Nextcloud lista os seus grupos e não pelo tamanho do limite.",
         "A pasted entry is too long": "Uma entrada colada é demasiado longa",
         "A quota must be greater than zero. Remove it to leave the group without a limit.": "Uma quota tem de ser superior a zero. Remova-a para deixar o grupo sem limite.",
         "ACL": "ACL",
