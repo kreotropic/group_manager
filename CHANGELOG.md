@@ -8,7 +8,7 @@
 All notable changes to Group Manager are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-15
 
 ### Added
 - **Quota tab** (when the Group Quota app is enabled): view, set and remove
@@ -16,9 +16,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   a custom size, "Unlimited" and a usage bar. Setting a quota asks for a
   password confirmation like the other write actions.
 - A warning on that tab for members who also belong to another group with a
-  quota. Group Quota applies only the first such group by group ID to a user
-  in several (its README calls the case undefined), and the warning names the
-  group that would actually win.
+  quota. Group Quota applies only one of them to a user in several (its
+  README calls the case undefined): the first in the order Nextcloud lists
+  the user's groups, which depends on the database (alphabetical by group ID
+  on MySQL/MariaDB, usually the order the user joined on SQLite and
+  PostgreSQL). The warning asks Nextcloud for that same order, so it names
+  the group that actually wins.
+- **Folder path picker when creating a group folder.** The create dialog takes
+  a full path (`a/b/c`) with a browsable tree of the levels that already
+  exist, a live preview of how the folder will appear in Files, and warnings
+  when the path already exists or nests inside another group folder.
+
+### Fixed
+- In Portuguese, the Write / Share / Delete column headers of the Folders tab
+  ran into each other; the columns are now wide enough for the translated
+  labels.
+
+### Known issue
+- Deleting a group does not remove its Group Quota limit, so a group created
+  later with the same ID inherits it. Group Quota itself behaves the same way;
+  remove the limit from the Quota tab before deleting the group.
 
 ## [0.4.1] - 2026-10-04
 

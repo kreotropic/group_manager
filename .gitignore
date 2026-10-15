@@ -10,3 +10,6 @@ __pycache__/
 *.pyc
 /build/artifacts/
 /build/.generated/
+
+# Signed release tarballs, kept per version (krankerl wipes build/artifacts/)
+/releases/
