@@ -7,9 +7,17 @@
 		<div class="gm-list__top">
 			<div class="gm-list__header">
 				<h2 class="gm-list__title">{{ t('group_manager', 'Groups') }}</h2>
-				<!-- On the title's line, not a row of their own: a third row here
-				     made this column's top region taller than a local group's
-				     header needs, leaving an empty band above the detail tabs. -->
+				<NcActions class="gm-list__options" :aria-label="t('group_manager', 'Options')">
+					<NcActionCheckbox :model-value="quickAccess"
+						@update:model-value="$emit('toggle-quick-access')">
+						{{ t('group_manager', 'Show shortcut in the top bar') }}
+					</NcActionCheckbox>
+				</NcActions>
+			</div>
+
+			<!-- The row stays without LDAP groups (no pills to show), so the
+			     search field keeps level with the detail panel's fields. -->
+			<div class="gm-list__switch">
 				<div v-if="hasLdapGroups" class="gm-list__filters" role="group" :aria-label="t('group_manager', 'Filter by origin')">
 					<button v-for="opt in originOptions"
 						:key="opt.value"
@@ -21,12 +29,6 @@
 						{{ opt.label }}
 					</button>
 				</div>
-				<NcActions :aria-label="t('group_manager', 'Options')">
-					<NcActionCheckbox :model-value="quickAccess"
-						@update:model-value="$emit('toggle-quick-access')">
-						{{ t('group_manager', 'Show shortcut in the top bar') }}
-					</NcActionCheckbox>
-				</NcActions>
 			</div>
 
 			<NcTextField class="gm-list__search"
@@ -76,7 +78,9 @@
 
 			<template v-else>
 				<template v-for="section in sections" :key="section.key">
-					<div v-if="sections.length > 1" class="gm-list__section-header">
+					<!-- Always shown, even for a single section: it sits level with
+					     the members heading on the right. -->
+					<div class="gm-list__section-header">
 						{{ section.label }}
 					</div>
 					<button v-for="group in section.groups"
@@ -87,22 +91,23 @@
 						:aria-current="group.id === selectedId ? 'true' : undefined"
 						:title="caseClashes.has(group.id) ? t('group_manager', 'Another group has the same name apart from upper/lower case. ID: {id}', { id: group.id }) : group.id"
 						@click="onItemClick($event, group.id)">
+						<GroupIcon :backend="group.backend" />
 						<span class="gm-list__row-main">
 							<span class="gm-list__row-name">{{ group.displayName }}</span>
 							<span v-if="group.id !== group.displayName" class="gm-list__row-gid">{{ group.id }}</span>
 						</span>
 						<AlertOutline v-if="caseClashes.has(group.id)" :size="16" class="gm-list__row-warn" />
-						<span v-if="group.backend === 'ldap'" class="gm-list__row-origin">LDAP</span>
-						<span class="gm-list__row-count" :class="{ 'gm-list__row-count--empty': !group.memberCount }">
-							{{ group.memberCount || 0 }}
-						</span>
+						<NcCounterBubble class="gm-list__row-count"
+							:class="{ 'gm-list__row-count--empty': !group.memberCount }"
+							:count="group.memberCount || 0"
+							raw />
 					</button>
 				</template>
 			</template>
 		</div>
 
 		<div class="gm-list__footer">
-			<NcButton variant="secondary" class="gm-list__create" @click="$emit('create')">
+			<NcButton variant="primary" wide class="gm-list__create" @click="$emit('create')">
 				<template #icon>
 					<Plus :size="17" />
 				</template>
@@ -116,6 +121,7 @@
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActions from '@nextcloud/vue/components/NcActions'
+import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import AccountGroupOutline from 'vue-material-design-icons/AccountGroupOutline.vue'
@@ -124,6 +130,7 @@ import AlertOutline from 'vue-material-design-icons/AlertOutline.vue'
 import Magnify from 'vue-material-design-icons/Magnify.vue'
 import Plus from 'vue-material-design-icons/Plus.vue'
 import { translate as t } from '@nextcloud/l10n'
+import GroupIcon from './GroupIcon.vue'
 
 export default {
 	name: 'GroupList',
@@ -132,6 +139,7 @@ export default {
 		NcButton,
 		NcActionCheckbox,
 		NcActions,
+		NcCounterBubble,
 		NcEmptyContent,
 		NcTextField,
 		AccountGroupOutline,
@@ -139,6 +147,7 @@ export default {
 		AlertOutline,
 		Magnify,
 		Plus,
+		GroupIcon,
 	},
 
 	props: {
@@ -282,33 +291,28 @@ export default {
 	flex: none;
 	display: flex;
 	flex-direction: column;
+	gap: var(--gf-row-gap);
+	box-sizing: border-box;
 	height: 100%;
 	min-height: 0;
-	background: var(--color-main-background);
-	border-inline-end: 1px solid var(--color-border);
+	padding-top: var(--gf-pad-top);
+	border-radius: var(--border-radius-container-large, 14px);
+	background: var(--color-background-dark);
 }
 
 .gm-list__top {
 	flex: none;
 	display: flex;
 	flex-direction: column;
-	box-sizing: border-box;
-	height: var(--gm-top-h);
-	/* Above the scroll area so the active filter's underline covers its
-	   top border, as the detail tab's does. */
-	position: relative;
-	z-index: 1;
+	gap: var(--gf-row-gap);
 }
 
-/* Same 8px top inset and 32px title row as the detail panel's header, so
-   "Groups" and the group's name sit on one line. */
 .gm-list__header {
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	min-height: 32px;
-	padding: 8px 12px 0 20px;
-	box-sizing: content-box;
+	gap: 8px;
+	height: var(--gf-row-header);
+	padding: 0 8px 0 20px;
 	--default-clickable-area: 32px;
 }
 
@@ -319,39 +323,66 @@ export default {
 	font-weight: 600;
 }
 
+/* NcTextField draws its box 2px inside its wrapper on each side (room for
+   the focus ring): 4px more, taken back with the margin, makes the visible
+   box --gf-row-input tall in a row of that same height. */
 .gm-list__search {
-	padding: 0 20px;
-	margin: 12px 0 0 !important;
+	--default-clickable-area: calc(var(--gf-row-input) + 4px);
+	padding: 0 12px;
+	margin: -2px 0 !important;
+}
+
+/* Segmented control: a darker pill track, the active option lifted out of
+   it on the main background. */
+.gm-list__options {
+	margin-left: auto;
+}
+
+/* A row of its own: on the title's line it didn't fit beside the options
+   menu in the list's width. */
+.gm-list__switch {
+	display: flex;
+	align-items: center;
+	height: var(--gf-row-switch);
+	padding: 0 12px;
 }
 
 .gm-list__filters {
+	flex: 1;
 	display: flex;
-	gap: 14px;
-	margin-left: auto;
+	gap: 2px;
 	min-width: 0;
+	padding: 3px;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-background-darker);
 }
 
-/* Lighter than the detail panel's Members/Folders tabs: these sit on the
-   title's line, so the active one is underlined just under its own text. */
 .gm-list__filters .gm-list__filter {
 	margin: 0;
 	min-height: 0;
-	padding: 2px 0;
+	flex: 1;
+	padding: 3px 10px;
 	white-space: nowrap;
 	border: none;
-	border-bottom: 2px solid transparent;
-	border-radius: 0;
+	border-radius: var(--border-radius-pill);
 	background: transparent;
-	color: var(--color-text-maxcontrast);
+	color: var(--color-main-text);
 	font-family: inherit;
 	font-size: 13px;
-	font-weight: 600;
+	font-weight: 500;
 	cursor: pointer;
 }
 
-.gm-list__filters .gm-list__filter--active {
-	color: var(--color-main-text);
-	border-bottom-color: var(--color-primary-element);
+.gm-list__filters .gm-list__filter:hover {
+	background: color-mix(in srgb, var(--color-main-background) 50%, transparent);
+}
+
+.gm-list__filters .gm-list__filter--active,
+.gm-list__filters .gm-list__filter--active:hover {
+	background: var(--color-main-background);
+	color: var(--gm-primary-text);
+	font-weight: 600;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
 }
 
 .gm-list__scroll {
@@ -362,7 +393,7 @@ export default {
 	/* Thin bar without arrows; the gutter is reserved so the rows keep the
 	   same right margin whether or not the list scrolls. */
 	scrollbar-gutter: stable;
-	border-top: 1px solid var(--color-border);
+	padding: 0 0 8px 8px;
 }
 
 .gm-list__section-header {
@@ -372,8 +403,12 @@ export default {
 	top: 0;
 	bottom: 0;
 	z-index: 1;
-	background: var(--color-main-background);
-	padding: 10px 20px 6px;
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: var(--gf-row-section);
+	background: var(--color-background-dark);
+	padding: 0 12px;
 	font-size: 11px;
 	font-weight: 700;
 	text-transform: uppercase;
@@ -387,15 +422,23 @@ export default {
 	align-items: center;
 	gap: 10px;
 	width: 100%;
+	/* NcAppNavigationItem's height; a row with a gid line under the name
+	   grows past it. */
+	min-height: var(--default-clickable-area);
 	box-sizing: border-box;
-	padding: 8px 8px 8px 20px;
+	padding: 3px 8px;
 	border: none;
-	border-radius: 0;
+	border-radius: var(--border-radius-element, 8px);
 	background: transparent;
 	color: var(--color-main-text);
 	text-align: left;
 	font-family: inherit;
 	cursor: pointer;
+}
+
+/* Core's button rule (margin 3px 3px 3px 0) outranks a single class. */
+.gm-list .gm-list__row {
+	margin: 0 0 2px;
 }
 
 /* The ring is for keyboard navigation only; a click must leave just the
@@ -406,19 +449,28 @@ export default {
 	box-shadow: none;
 }
 
-.gm-list__row:focus-visible {
-	outline: 2px solid var(--color-main-text);
+.gm-list__filters .gm-list__filter--active:focus:not(:focus-visible) {
+	box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+}
+
+/* !important to beat core's button:focus-visible ring (main text colour
+   plus a 4px shadow), which is !important too. */
+.gm-list .gm-list__row:focus-visible,
+.gm-list__filters .gm-list__filter:focus-visible {
+	outline: 2px solid var(--color-primary-element) !important;
 	outline-offset: -2px;
-	box-shadow: none;
+	box-shadow: none !important;
 }
 
 .gm-list__row:hover {
 	background: var(--color-background-hover);
 }
 
-.gm-list__row--active {
-	background: var(--color-primary-element-light);
-	color: var(--color-primary-element-light-text);
+.gm-list__row--active,
+.gm-list__row--active:hover {
+	background: var(--color-main-background);
+	color: var(--gm-primary-text);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
 }
 
 .gm-list__row-main {
@@ -429,7 +481,6 @@ export default {
 }
 
 .gm-list__row-name {
-	font-weight: 400;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -437,7 +488,7 @@ export default {
 }
 
 .gm-list__row--active .gm-list__row-name {
-	font-weight: bold;
+	font-weight: 600;
 }
 
 .gm-list__row-gid {
@@ -454,56 +505,42 @@ export default {
 	color: var(--color-warning-text);
 }
 
-.gm-list__row-origin {
+.gm-list__row-count {
 	flex-shrink: 0;
-	padding: 0 6px;
-	border: 1px solid var(--color-border-maxcontrast);
-	border-radius: var(--border-radius-pill);
-	color: var(--color-text-maxcontrast);
-	font-size: 10px;
-	font-weight: 600;
-	letter-spacing: .04em;
+	font-variant-numeric: tabular-nums;
 }
 
 .gm-list__row-count--empty {
 	opacity: .7;
 }
 
-.gm-list__row-count {
-	flex-shrink: 0;
-	/* Fixed width, right-aligned: the warning/LDAP badges before it stay in
-	   one column whatever the number (0 or 10). */
-	min-width: 3ch;
-	text-align: right;
-	font-size: 13px;
-	color: var(--color-text-maxcontrast);
-	font-variant-numeric: tabular-nums;
-}
-
 .gm-list__footer {
 	flex-shrink: 0;
-	padding: 12px 20px;
-	border-top: 1px solid var(--color-border);
-}
-
-.gm-list__create {
-	width: 100%;
-	justify-content: center;
-	border-radius: var(--border-radius-pill);
+	padding: 12px;
 }
 
 .gm-skeleton-row {
 	display: flex;
 	align-items: center;
-	height: 38px;
-	padding: 0 20px;
+	gap: 10px;
+	height: 40px;
+	padding: 0 8px;
+}
+
+.gm-skeleton-row::before {
+	content: '';
+	width: 28px;
+	height: 28px;
+	border-radius: var(--border-radius-large);
+	background: var(--color-background-darker);
+	animation: gm-skeleton-pulse 1.4s ease-in-out infinite;
 }
 
 .gm-skeleton-row__text {
 	height: 12px;
 	width: 60%;
 	border-radius: 6px;
-	background: var(--color-background-dark);
+	background: var(--color-background-darker);
 	animation: gm-skeleton-pulse 1.4s ease-in-out infinite;
 }
 

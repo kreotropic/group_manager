@@ -340,7 +340,7 @@ export default {
 	gap: 12px;
 	padding: 16px;
 	margin-bottom: 16px;
-	border: 1px solid var(--color-border);
+	border: 1px solid var(--color-border-dark);
 	border-radius: 8px;
 }
 
@@ -378,7 +378,8 @@ export default {
 .gm-gq__bar {
 	height: 8px;
 	border-radius: 4px;
-	background: var(--color-background-dark);
+	/* Darker than the panel's own --color-background-dark. */
+	background: var(--color-background-darker);
 	overflow: hidden;
 }
 

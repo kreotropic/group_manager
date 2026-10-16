@@ -29,7 +29,8 @@ export function memberNameTitle(member) {
 /**
  * Detail line under a member's name: username and email, each only when it
  * adds something. A username identical to the display name (ncadmin) would
- * just repeat the line above it, and a missing email is left out rather than
+ * just repeat the line above it, as would one identical to the email's local
+ * part (ana.silva / ana.silva@...); a missing email is left out rather than
  * padded with a placeholder.
  *
  * @param {{uid: string, displayName: string, email?: string}} member
@@ -37,7 +38,9 @@ export function memberNameTitle(member) {
  */
 export function memberDetailLine(member) {
 	const parts = []
-	if (member.uid && member.uid !== member.displayName && !isUuid(member.uid)) {
+	const emailLocal = (member.email ?? '').split('@')[0].toLowerCase()
+	if (member.uid && member.uid !== member.displayName && !isUuid(member.uid)
+		&& member.uid.toLowerCase() !== emailLocal) {
 		parts.push(member.uid)
 	}
 	if (member.email) {

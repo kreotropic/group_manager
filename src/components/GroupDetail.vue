@@ -15,40 +15,39 @@
 		<template v-else-if="group">
 			<div class="gm-detail-panel__fixed">
 				<header class="gm-detail__header">
+					<GroupIcon :backend="group.backend" :size="44" />
 					<div class="gm-detail__titles">
-						<div class="gm-detail__heading">
-							<h2 class="gm-detail__name">
-								<span class="gm-detail__name-text">{{ group.displayName }}</span>
-								<span v-if="group.backend !== 'local'"
-									class="gm-detail__badge"
-									:title="t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.')">
-									{{ t('group_manager', 'LDAP · read-only') }}
-								</span>
-								<NcButton v-if="group.canRename"
-									class="gm-detail__rename"
-									variant="tertiary"
-									:aria-label="t('group_manager', 'Rename group')"
-									:title="t('group_manager', 'Rename group')"
-									@click="showRenameDialog = true">
-									<template #icon>
-										<Pencil :size="16" />
-									</template>
-								</NcButton>
-							</h2>
-							<p v-if="subtitleText" class="gm-detail__subtitle" :title="subtitleText">{{ subtitleText }}</p>
-						</div>
-						<p v-if="group.dn" class="gm-detail__dn">
-							<span class="gm-detail__dn-label">DN</span>
-							<code class="gm-detail__dn-value">{{ group.dn }}</code>
-							<NcButton variant="tertiary"
+						<h2 class="gm-detail__name">
+							<span class="gm-detail__name-text">{{ group.displayName }}</span>
+							<span v-if="group.backend !== 'local'"
+								class="gm-detail__badge"
+								:title="t('group_manager', 'This group is managed by an external backend. Renaming and deleting are disabled here.')">
+								{{ t('group_manager', 'LDAP · read-only') }}
+							</span>
+							<!-- A button, not a line under the summary: the header row
+							     has the same fixed height as the list's title row. -->
+							<NcButton v-if="group.dn"
+								class="gm-detail__dn"
+								variant="tertiary"
 								:aria-label="t('group_manager', 'Copy DN')"
-								:title="t('group_manager', 'Copy DN')"
+								:title="group.dn"
 								@click="copyDn">
 								<template #icon>
 									<ContentCopy :size="16" />
 								</template>
 							</NcButton>
-						</p>
+							<NcButton v-if="group.canRename"
+								class="gm-detail__rename"
+								variant="tertiary"
+								:aria-label="t('group_manager', 'Rename group')"
+								:title="t('group_manager', 'Rename group')"
+								@click="showRenameDialog = true">
+								<template #icon>
+									<Pencil :size="16" />
+								</template>
+							</NcButton>
+						</h2>
+						<p v-if="subtitleText" class="gm-detail__subtitle" :title="subtitleText">{{ subtitleText }}</p>
 					</div>
 
 					<NcActions v-if="group.canDelete"
@@ -64,30 +63,34 @@
 					</NcActions>
 				</header>
 
-				<nav v-if="showTabs" class="gm-detail__tabs">
-					<button type="button"
-						class="gm-detail__tab"
-						:class="{ 'gm-detail__tab--active': activeTab === 'members' }"
-						@click="activeTab = 'members'">
-						<span class="gm-detail__tab-label">{{ t('group_manager', 'Members') }}</span>
-						<span v-if="showMembersDot" class="gm-detail__tab-dot" />
-					</button>
-					<button v-if="showFoldersTab"
-						type="button"
-						class="gm-detail__tab"
-						:class="{ 'gm-detail__tab--active': activeTab === 'folders' }"
-						@click="activeTab = 'folders'">
-						<span class="gm-detail__tab-label">{{ t('group_manager', 'Folders') }}</span>
-						<span v-if="showFoldersDot" class="gm-detail__tab-dot" />
-					</button>
-					<button v-if="showQuotaTab"
-						type="button"
-						class="gm-detail__tab"
-						:class="{ 'gm-detail__tab--active': activeTab === 'quota' }"
-						@click="activeTab = 'quota'">
-						<span class="gm-detail__tab-label">{{ t('group_manager', 'Quota') }}</span>
-						<span v-if="showQuotaDot" class="gm-detail__tab-dot" />
-					</button>
+				<!-- Always there, even with Members alone: the row lines up with
+				     the list's origin pills. -->
+				<nav class="gm-detail__tabs">
+					<div class="gm-detail__tabs-track">
+						<button type="button"
+							class="gm-detail__tab"
+							:class="{ 'gm-detail__tab--active': activeTab === 'members' }"
+							@click="activeTab = 'members'">
+							<span class="gm-detail__tab-label">{{ t('group_manager', 'Members') }}</span>
+							<span v-if="showMembersDot" class="gm-detail__tab-dot" />
+						</button>
+						<button v-if="showFoldersTab"
+							type="button"
+							class="gm-detail__tab"
+							:class="{ 'gm-detail__tab--active': activeTab === 'folders' }"
+							@click="activeTab = 'folders'">
+							<span class="gm-detail__tab-label">{{ t('group_manager', 'Folders') }}</span>
+							<span v-if="showFoldersDot" class="gm-detail__tab-dot" />
+						</button>
+						<button v-if="showQuotaTab"
+							type="button"
+							class="gm-detail__tab"
+							:class="{ 'gm-detail__tab--active': activeTab === 'quota' }"
+							@click="activeTab = 'quota'">
+							<span class="gm-detail__tab-label">{{ t('group_manager', 'Quota') }}</span>
+							<span v-if="showQuotaDot" class="gm-detail__tab-dot" />
+						</button>
+					</div>
 				</nav>
 			</div>
 
@@ -172,6 +175,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import ContentCopy from 'vue-material-design-icons/ContentCopy.vue'
 import TrashCanOutline from 'vue-material-design-icons/TrashCanOutline.vue'
 import Pencil from 'vue-material-design-icons/Pencil.vue'
+import GroupIcon from './GroupIcon.vue'
 import RenameGroupDialog from './RenameGroupDialog.vue'
 import GroupMembersManager from './GroupMembersManager.vue'
 import GroupFoldersManager from './GroupFoldersManager.vue'
@@ -195,6 +199,7 @@ export default {
 		ContentCopy,
 		Pencil,
 		TrashCanOutline,
+		GroupIcon,
 		RenameGroupDialog,
 		GroupMembersManager,
 		GroupFoldersManager,
@@ -519,7 +524,8 @@ export default {
 	overflow: hidden;
 	display: flex;
 	flex-direction: column;
-	padding: 0 32px;
+	box-sizing: border-box;
+	padding: var(--gf-pad-top) 28px 0;
 }
 
 .gm-detail-panel__loading {
@@ -533,12 +539,7 @@ export default {
 	flex-shrink: 0;
 	display: flex;
 	flex-direction: column;
-	box-sizing: border-box;
-	/* +1px: the list's rule is the top border of its scroll area, below its
-	   top region; this one is the last pixel of this box. */
-	height: calc(var(--gm-top-h) + 1px);
-	padding-top: 8px;
-	border-bottom: 1px solid var(--color-border);
+	gap: var(--gf-row-gap);
 }
 
 .gm-detail-panel__body {
@@ -546,28 +547,26 @@ export default {
 	min-height: 0;
 	min-width: 0;
 	display: flex;
-	padding-top: 20px;
+	padding-top: var(--gf-row-gap);
 }
 
 .gm-detail__header {
 	display: flex;
-	gap: 12px;
-	align-items: flex-start;
-}
-
-.gm-detail__titles {
-	flex: 1;
-	min-width: 0;
+	gap: 14px;
+	align-items: center;
+	height: var(--gf-row-header);
 }
 
 .gm-detail__name {
 	display: flex;
 	align-items: center;
-	min-height: 32px;
+	min-height: 28px;
 	gap: 4px;
 	margin: 0;
-	font-size: 24px;
+	--default-clickable-area: 28px;
+	font-size: 22px;
 	font-weight: 600;
+	line-height: 1.3;
 	text-align: left;
 	/* Nextcloud's own ".section h2" is inline-flex + justify-content:
 	   center, which centred the title over the left-aligned rest. */
@@ -575,22 +574,11 @@ export default {
 	max-width: none;
 }
 
+/* Always shown, in a muted tone: hidden until hover it still took its
+   width, which read as a hole between the name and the summary that now
+   follows it on the same line. */
 .gm-detail__rename {
-	/* The default 44px tap target towered over the 24px title and looked
-	   detached; revealed on hover/focus, always shown where there is no hover. */
-	--default-clickable-area: 32px;
-	opacity: 0;
-}
-
-.gm-detail__name:hover .gm-detail__rename,
-.gm-detail__name:focus-within .gm-detail__rename {
-	opacity: 1;
-}
-
-@media (hover: none) {
-	.gm-detail__rename {
-		opacity: 1;
-	}
+	color: var(--color-text-maxcontrast);
 }
 
 .gm-detail__badge {
@@ -611,22 +599,20 @@ export default {
 	white-space: nowrap;
 }
 
-/* Name and subtitle share one line and a baseline. The top region has a fixed
-   height (--gm-top-h, shared with the group list so the rule under the tabs is
-   one continuous line), so a subtitle that wrapped underneath pushed the tabs
-   against it; it is cut with an ellipsis instead, full text on hover. The
-   name keeps priority: the subtitle gives way first. */
-.gm-detail__heading {
+/* Name and summary on one line, sharing a baseline. The name keeps
+   priority: the summary gives way first, cut with an ellipsis (full text
+   on hover). */
+.gm-detail__titles {
+	flex: 1;
+	min-width: 0;
 	display: flex;
 	align-items: baseline;
 	column-gap: 12px;
-	min-width: 0;
 }
 
-.gm-detail__heading .gm-detail__name {
+.gm-detail__titles .gm-detail__name {
 	flex: 0 1 auto;
 	min-width: 0;
-	max-width: 100%;
 }
 
 .gm-detail__subtitle {
@@ -642,62 +628,76 @@ export default {
 
 .gm-detail__menu {
 	flex-shrink: 0;
-	/* The title row is 36px tall (24px type at 1.5), the button 32px: 2px
-	   puts the button's centre on the title's. */
-	margin-top: 2px;
 	--default-clickable-area: 32px;
 }
 
 .gm-detail__dn {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin: 2px 0 0;
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
+	flex-shrink: 0;
 }
 
-.gm-detail__dn-label {
-	font-weight: 700;
-	letter-spacing: .07em;
-}
-
-.gm-detail__dn-value {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-family: monospace;
-}
-
+/* The same pill control as the group list's origin filter (GroupList.vue):
+   a darker track, the active tab lifted out of it on the main background.
+   The row keeps the list's switch height so the two stay level. */
 .gm-detail__tabs {
 	display: flex;
-	gap: 22px;
-	margin-top: auto;
+	align-items: center;
+	height: var(--gf-row-switch);
+}
+
+.gm-detail__tabs-track {
+	display: flex;
+	gap: 2px;
+	min-width: 0;
+	padding: 3px;
+	border-radius: var(--border-radius-pill);
+	background: var(--color-background-darker);
 }
 
 .gm-detail__tabs .gm-detail__tab {
 	margin: 0;
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	gap: 6px;
-	padding: 0 0 10px;
+	min-height: 0;
+	padding: 3px 16px;
+	white-space: nowrap;
 	border: none;
-	border-bottom: 2px solid transparent;
-	border-radius: 0;
+	border-radius: var(--border-radius-pill);
 	background: transparent;
-	color: var(--color-text-maxcontrast);
-	font-size: 14px;
-	font-weight: 600;
+	color: var(--color-main-text);
 	font-family: inherit;
+	font-size: 13px;
+	font-weight: 500;
 	cursor: pointer;
 }
 
-.gm-detail__tabs .gm-detail__tab--active {
-	margin-bottom: -1px;
-	border-bottom-color: var(--color-primary-element);
-	color: var(--color-main-text);
+.gm-detail__tabs .gm-detail__tab:hover {
+	background: color-mix(in srgb, var(--color-main-background) 50%, transparent);
+}
+
+.gm-detail__tabs .gm-detail__tab--active,
+.gm-detail__tabs .gm-detail__tab--active:hover {
+	background: var(--color-main-background);
+	color: var(--gm-primary-text);
 	font-weight: 600;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+}
+
+/* The ring is for keyboard navigation only; a click leaves just the pill. */
+.gm-detail__tabs .gm-detail__tab:focus:not(:focus-visible) {
+	outline: none;
+}
+
+.gm-detail__tabs .gm-detail__tab:not(.gm-detail__tab--active):focus:not(:focus-visible) {
+	box-shadow: none;
+}
+
+/* !important to beat core's own button:focus-visible ring, which is
+   !important too (main text colour plus a 4px background shadow). */
+.gm-detail__tabs .gm-detail__tab:focus-visible {
+	outline: 2px solid var(--color-primary-element) !important;
+	outline-offset: -2px;
+	box-shadow: none !important;
 }
 
 .gm-detail__tab-label {
@@ -723,10 +723,10 @@ export default {
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	margin: 0 -32px;
-	padding: 10px 32px 14px;
-	border-top: 1px solid var(--color-border);
-	background: var(--color-background-hover);
+	margin: 0 -28px;
+	padding: 10px 28px 14px;
+	border-top: 1px solid var(--color-border-dark);
+	background: var(--color-main-background);
 }
 
 .gm-detail__footer-summary {

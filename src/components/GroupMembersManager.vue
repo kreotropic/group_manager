@@ -5,7 +5,7 @@
 <template>
 	<div class="gm-mm">
 		<div class="gm-mm__scroll">
-			<div v-if="!hideTitle || canAdd || showFilter" class="gm-mm__header">
+			<div class="gm-mm__header">
 				<h3 v-if="!hideTitle" class="gm-mm__title">
 					{{ t('group_manager', 'Members') }}
 					<span v-if="headerCountText" class="gm-mm__count">{{ headerCountText }}</span>
@@ -13,8 +13,7 @@
 
 				<div v-if="canAdd"
 					ref="addWrapper"
-					class="gm-mm__add"
-					:class="{ 'gm-mm__add--open': showDropdown }">
+					class="gm-mm__add">
 					<AccountOutline :size="18" class="gm-mm__add-icon" />
 					<input ref="addInput"
 						v-model="addQuery"
@@ -81,8 +80,7 @@
 					</ul>
 				</div>
 
-				<NcTextField v-if="showFilter"
-					class="gm-mm__search"
+				<NcTextField class="gm-mm__search"
 					v-model="memberSearch"
 					:label="t('group_manager', 'Filter members')"
 				:label-outside="true"
@@ -183,54 +181,71 @@
 				</p>
 
 				<div v-else class="gm-mm__table" role="table">
+					<!-- Same height and style as the group list's section header,
+					     so the first member row is level with the first group. -->
+					<div class="gm-mm__section" aria-hidden="true">
+						{{ t('group_manager', 'Members') }} · {{ total ?? members.length }}
+					</div>
 					<div v-for="member in members"
 						:key="member.uid"
 						class="gm-mm__row"
 						role="row"
 						:class="{ 'gm-mm__row--leaving': isPendingRemove(member.uid) }">
 						<span class="gm-mm__col-member" role="cell">
-							<MemberAvatar :uid="member.uid" :name="member.displayName" :size="28" class="gm-mm__row-avatar" />
+							<NcAvatar :user="member.uid"
+								:display-name="member.displayName"
+								:size="34"
+								:hide-status="true"
+								:disable-menu="true"
+								:disable-tooltip="true"
+								class="gm-mm__row-avatar" />
 							<span class="gm-mm__row-text">
 								<span class="gm-mm__row-name" :title="memberNameTitle(member)">{{ member.displayName }}</span>
 								<span v-if="memberDetailLine(member)" class="gm-mm__row-uid">{{ memberDetailLine(member) }}</span>
 							</span>
 						</span>
-						<span v-if="adminState(member.uid) !== 'none' && !isPendingRemove(member.uid)"
-							class="gm-mm__row-admin"
-							:class="'gm-mm__row-admin--' + adminState(member.uid)"
-							:title="adminStateTitle(member.uid)">
-							<ShieldAccount :size="14" />
-							{{ t('group_manager', 'group admin') }}
-						</span>
-						<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
-							{{ t('group_manager', 'leaving') }}
-						</span>
-						<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
-							{{ t('group_manager', 'disabled') }}
-						</span>
+						<!-- Fixed-width zone: hover buttons, then the badges flush
+						     right, so both line up as columns down the list. -->
 						<span class="gm-mm__col-actions" role="cell">
-							<button v-if="canToggleAdmin(member)"
-								type="button"
-								class="gm-mm__row-action gm-mm__row-admin-toggle"
-								:aria-label="willBeAdmin(member.uid)
-									? t('group_manager', 'Remove {name} as group admin', { name: member.displayName })
-									: t('group_manager', 'Make {name} a group admin', { name: member.displayName })"
-								:title="willBeAdmin(member.uid)
-									? t('group_manager', 'Remove as group admin')
-									: t('group_manager', 'Make group admin')"
-								:aria-pressed="willBeAdmin(member.uid) ? 'true' : 'false'"
-								:disabled="applying"
-								@click="toggleAdmin(member)">
-								<ShieldAccount v-if="willBeAdmin(member.uid)" :size="16" />
-								<ShieldAccountOutline v-else :size="16" />
-							</button>
-							<button v-if="canRemove && !isPendingRemove(member.uid)"
-								type="button"
-								class="gm-mm__row-action gm-mm__row-remove"
-								:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
-								:title="t('group_manager', 'Remove from group')"
-								:disabled="applying"
-								@click="markForRemoval(member)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
+							<span class="gm-mm__row-buttons">
+								<button v-if="canToggleAdmin(member)"
+									type="button"
+									class="gm-mm__row-action gm-mm__row-admin-toggle"
+									:aria-label="willBeAdmin(member.uid)
+										? t('group_manager', 'Remove {name} as group admin', { name: member.displayName })
+										: t('group_manager', 'Make {name} a group admin', { name: member.displayName })"
+									:title="willBeAdmin(member.uid)
+										? t('group_manager', 'Remove as group admin')
+										: t('group_manager', 'Make group admin')"
+									:aria-pressed="willBeAdmin(member.uid) ? 'true' : 'false'"
+									:disabled="applying"
+									@click="toggleAdmin(member)">
+									<ShieldAccount v-if="willBeAdmin(member.uid)" :size="16" />
+									<ShieldAccountOutline v-else :size="16" />
+								</button>
+								<button v-if="canRemove && !isPendingRemove(member.uid)"
+									type="button"
+									class="gm-mm__row-action gm-mm__row-remove"
+									:aria-label="t('group_manager', 'Remove {name}', { name: member.displayName })"
+									:title="t('group_manager', 'Remove from group')"
+									:disabled="applying"
+									@click="markForRemoval(member)"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" /></svg></button>
+							</span>
+							<span class="gm-mm__row-badges">
+								<span v-if="adminState(member.uid) !== 'none' && !isPendingRemove(member.uid)"
+									class="gm-mm__row-admin"
+									:class="'gm-mm__row-admin--' + adminState(member.uid)"
+									:title="adminStateTitle(member.uid)">
+									<ShieldAccount :size="14" />
+									{{ t('group_manager', 'group admin') }}
+								</span>
+								<span v-if="isPendingRemove(member.uid)" class="gm-mm__row-leaving-label">
+									{{ t('group_manager', 'leaving') }}
+								</span>
+								<span v-else-if="!member.enabled" class="gm-mm__row-disabled-label">
+									{{ t('group_manager', 'disabled') }}
+								</span>
+							</span>
 						</span>
 					</div>
 				</div>
@@ -273,6 +288,7 @@ import { translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showInfo } from '@nextcloud/dialogs'
 import { confirmPassword } from '@nextcloud/password-confirmation'
 import '@nextcloud/password-confirmation/style.css'
+import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
@@ -295,7 +311,6 @@ import {
 	addSubAdmin,
 	removeSubAdmin,
 } from '../services/api.js'
-import MemberAvatar from './MemberAvatar.vue'
 import { memberDetailLine, memberNameTitle } from '../utils/members.js'
 import { extractErrorMessage } from '../utils/errors.js'
 import { runWithConcurrency } from '../utils/concurrency.js'
@@ -318,7 +333,7 @@ export default {
 		AlertCircle,
 		CheckCircle,
 		Magnify,
-		MemberAvatar,
+		NcAvatar,
 		ShieldAccount,
 		ShieldAccountOutline,
 	},
@@ -524,12 +539,6 @@ export default {
 				return this.totalMemberCount
 			}
 			return this.memberSearch === '' ? this.total : null
-		},
-
-		// No filter box for a short list,
-		// but keep it while a term is typed so the list can be un-filtered.
-		showFilter() {
-			return this.memberSearch !== '' || (this.totalMemberCount ?? this.total ?? 0) >= 10
 		},
 
 		headerCountText() {
@@ -1269,15 +1278,13 @@ export default {
 	/* One explicit height for the add field and the filter's input, so the two
 	   outlines match whatever NcTextField's own sizing does (it is 4px short of
 	   --default-clickable-area: the 1px outline is drawn outside that box). */
-	--gm-field-h: calc(var(--default-clickable-area) - 4px);
+	--gm-field-h: var(--gf-row-input);
+	flex-shrink: 0;
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	margin-bottom: 12px;
-}
-
-.gm-mm__search :deep(input) {
-	height: var(--gm-field-h);
+	height: var(--gf-row-input);
+	margin-bottom: var(--gf-row-gap);
 }
 
 .gm-mm__title {
@@ -1295,13 +1302,18 @@ export default {
 	white-space: nowrap;
 }
 
+/* Same 4px/-2px trick as the group search (GroupList.vue): a visible box
+   of --gf-row-input, like the add field's. */
 .gm-mm__search {
-	/* The secondary action: narrower than the add field and pushed right. */
-	flex: 0 0 240px;
+	--default-clickable-area: calc(var(--gf-row-input) + 4px);
+	/* The secondary action: narrower than the add field, which pushes it
+	   right; with no add field (read-only LDAP groups) it starts the row.
+	   Gives way first in a narrow panel. */
+	flex: 0 1 240px;
 	min-width: 0;
 	/* Its root also carries a 6px top margin (meant for stacking under a
 	   label in a form) — asymmetric margin skews flex centering. */
-	margin: 0 !important;
+	margin: -2px 0 !important;
 }
 
 /* Single add field: user, whole group, or a pasted list. */
@@ -1314,17 +1326,24 @@ export default {
 	min-width: 0;
 	height: var(--gm-field-h);
 	padding: 0 12px 0 0;
-	/* Same outline (a box-shadow pair, not a border), height and
+	/* Same outline (a box-shadow pair, not a border), height, radius and
 	   icon-to-text distance as NcTextField, so this field and the filter
-	   beside it read as one family. */
+	   beside it read as one family. Copied from NcInputField: the stronger
+	   line is the top edge, the bottom one in the dark theme. */
 	border: none;
-	box-shadow: 0 -1px 0 0 var(--color-border-maxcontrast), 0 0 0 1px color-mix(in srgb, var(--color-border-maxcontrast) 35%, transparent);
-	border-radius: var(--border-radius-large);
+	box-shadow: 0 -1px var(--color-border-maxcontrast), 0 0 0 1px color-mix(in srgb, var(--color-border-maxcontrast), 65% transparent);
+	border-radius: var(--border-radius-element);
 	background: var(--color-main-background);
 }
 
-.gm-mm__add--open {
-	box-shadow: 0 0 0 2px var(--color-primary-element);
+[data-theme-dark] .gm-mm__add {
+	box-shadow: 0 1px var(--color-border-maxcontrast), 0 0 0 1px color-mix(in srgb, var(--color-border-maxcontrast), 65% transparent);
+}
+
+/* NcInputField's focus ring: 2px of the text colour, 2px of background
+   around it. */
+.gm-mm__add:focus-within {
+	box-shadow: 0 0 0 2px var(--color-main-text), 0 0 0 4px var(--color-main-background);
 }
 
 .gm-mm__add-icon {
@@ -1344,6 +1363,9 @@ export default {
 	height: var(--gm-field-h) !important;
 	border: none;
 	outline: none;
+	/* Core's input:focus adds a 2px background-coloured ring, which here
+	   covered the field's own focus ring at the top and bottom. */
+	box-shadow: none !important;
 	background: transparent;
 	font-family: inherit;
 	font-size: 14px;
@@ -1514,9 +1536,9 @@ export default {
 .gm-mm__paste-review {
 	margin-bottom: 12px;
 	padding: 10px 12px;
-	border: 1px solid var(--color-border);
+	border: 1px solid var(--color-border-dark);
 	border-radius: var(--border-radius-large);
-	background: var(--color-background-hover);
+	background: var(--color-main-background);
 }
 
 .gm-mm__paste-review-summary {
@@ -1594,46 +1616,84 @@ export default {
 .gm-mm__row {
 	display: flex;
 	align-items: center;
-	min-height: 44px;
-	border-top: 1px solid var(--color-border);
+	/* The same vertical padding on every row, with or without an email. */
+	padding: 8px 0;
+	border-top: 1px solid var(--color-border-dark);
 }
 
-/* The add field already ends in a line of its own; a second one right under
-   it, from the first row, read as a double rule. */
-.gm-mm__row:first-child {
+/* The heading above already ends the block; a rule right under it read as
+   a double line. */
+.gm-mm__section + .gm-mm__row {
 	border-top: none;
 }
 
-.gm-mm__row:hover {
+/* Matches the group list's section header (GroupList.vue). */
+.gm-mm__section {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: var(--gf-row-section);
 	background: var(--color-background-hover);
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: .09em;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-mm__row:hover {
+	background: var(--color-main-background);
 }
 
 .gm-mm__col-member {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 12px;
 	flex: 1 1 auto;
 	min-width: 0;
 }
 
+/* 48px of hover buttons + a 120px badge column, flush right. */
 .gm-mm__col-actions {
 	flex: 0 0 auto;
-	min-width: 22px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.gm-mm__row-buttons {
+	flex: none;
+	width: 48px;
 	display: flex;
 	justify-content: flex-end;
 	gap: 2px;
+}
+
+.gm-mm__row-badges {
+	flex: none;
+	min-width: 120px;
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 6px;
 }
 
 .gm-mm__row-avatar {
 	flex-shrink: 0;
 }
 
+/* Name on top, email (and username, when it adds something) under it. */
 .gm-mm__row-text {
 	flex: 1;
 	min-width: 0;
 	display: flex;
-	align-items: baseline;
-	gap: 8px;
+	flex-direction: column;
+	justify-content: center;
+	min-height: 34px;
+	line-height: 1.35;
 }
 
 .gm-mm__row-uid {
@@ -1647,20 +1707,12 @@ export default {
 }
 
 .gm-mm__row-name {
-	flex-shrink: 0;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-size: 14px;
-}
-
-/* Narrow panel: no room for name and details side by side, so they stack. */
-@container (max-width: 500px) {
-	.gm-mm__row-text {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 0;
-	}
+	font-weight: 500;
 }
 
 .gm-mm__row--leaving .gm-mm__row-name {
@@ -1671,7 +1723,6 @@ export default {
 .gm-mm__row-disabled-label,
 .gm-mm__row-leaving-label {
 	flex-shrink: 0;
-	margin-right: 8px;
 	font-size: 12px;
 }
 
@@ -1742,7 +1793,6 @@ export default {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	margin-right: 8px;
 	padding: 1px 8px 1px 6px;
 	border: 1px solid transparent;
 	border-radius: var(--border-radius-pill);

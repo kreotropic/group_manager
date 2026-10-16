@@ -864,8 +864,9 @@ export default {
 	min-width: 0;
 	height: 40px;
 	padding: 0 12px;
-	border: 1px solid var(--color-border);
+	border: 1px solid var(--color-border-dark);
 	border-radius: 8px;
+	background: var(--color-main-background);
 }
 
 .gm-fm__create-folder {
@@ -1051,7 +1052,7 @@ export default {
 	display: flex;
 	align-items: center;
 	height: 40px;
-	border-top: 1px solid var(--color-border);
+	border-top: 1px solid var(--color-border-dark);
 }
 
 .gm-fm__row--head {
@@ -1067,7 +1068,7 @@ export default {
 }
 
 .gm-fm__row--changed {
-	background: var(--color-background-hover);
+	background: var(--color-main-background);
 }
 
 .gm-fm__col-name {
@@ -1275,7 +1276,9 @@ export default {
 	padding: 2px;
 	box-sizing: border-box;
 	border-radius: 9px;
-	background: var(--color-background-dark);
+	/* Darker than the panel's own --color-background-dark, or the off
+	   track disappears into it. */
+	background: var(--color-background-darker);
 	cursor: pointer;
 	transition: background-color .1s ease-in-out;
 }
