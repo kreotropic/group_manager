@@ -1268,10 +1268,16 @@ export default {
 	min-height: 0;
 	overflow-y: auto;
 	scrollbar-gutter: stable;
-	/* The reserved scrollbar lane is pushed out into the panel's own right
-	   padding, so the rows end exactly where the filter and the tab rule do. */
-	margin-inline-end: calc(-1 * var(--gm-scrollbar-w, 12px));
-	padding-bottom: 8px;
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-border-dark) transparent;
+	/* The reserved scrollbar lane and the 4px before it are pushed out into
+	   the panel's own right padding, so the rows end exactly where the
+	   fields above do. --gm-scrollbar-w is measured with this same thin
+	   bar (App.vue). */
+	margin-inline-end: calc(-1 * (var(--gm-scrollbar-w, 12px) + 4px));
+	padding-inline-end: 4px;
+	/* Room under the last row, so it is never cut against the panel edge. */
+	padding-bottom: 16px;
 }
 
 .gm-mm__header {
@@ -1313,7 +1319,9 @@ export default {
 	min-width: 0;
 	/* Its root also carries a 6px top margin (meant for stacking under a
 	   label in a form) — asymmetric margin skews flex centering. */
-	margin: -2px 0 !important;
+	/* -2px on every side: the 2px focus-ring room inside NcTextField's
+	   wrapper would otherwise inset the box from the rows' edges. */
+	margin: -2px !important;
 }
 
 /* Single add field: user, whole group, or a pasted list. */
@@ -1538,7 +1546,7 @@ export default {
 	padding: 10px 12px;
 	border: 1px solid var(--color-border-dark);
 	border-radius: var(--border-radius-large);
-	background: var(--color-main-background);
+	background: var(--color-background-hover);
 }
 
 .gm-mm__paste-review-summary {
@@ -1636,7 +1644,7 @@ export default {
 	align-items: center;
 	box-sizing: border-box;
 	height: var(--gf-row-section);
-	background: var(--color-background-hover);
+	background: var(--color-main-background);
 	font-size: 11px;
 	font-weight: 700;
 	text-transform: uppercase;
@@ -1645,7 +1653,7 @@ export default {
 }
 
 .gm-mm__row:hover {
-	background: var(--color-main-background);
+	background: var(--color-background-hover);
 }
 
 .gm-mm__col-member {
@@ -1656,29 +1664,59 @@ export default {
 	min-width: 0;
 }
 
-/* 48px of hover buttons + a 120px badge column, flush right. */
+/* One fixed 120px zone at the row's right edge for the badges and the
+   hover buttons, so neither ever sits mid-row. The buttons overlay the
+   zone's right end and take the badges' place while the row is hovered or
+   focused (they stay in the tab order, only transparent). */
 .gm-mm__col-actions {
-	flex: 0 0 auto;
+	position: relative;
+	flex: none;
+	width: 120px;
 	display: flex;
+	justify-content: flex-end;
 	align-items: center;
-	gap: 4px;
 }
 
 .gm-mm__row-buttons {
-	flex: none;
-	width: 48px;
+	position: absolute;
+	inset-inline-end: 0;
+	top: 50%;
+	transform: translateY(-50%);
 	display: flex;
-	justify-content: flex-end;
 	gap: 2px;
 }
 
 .gm-mm__row-badges {
-	flex: none;
-	min-width: 120px;
 	display: flex;
 	justify-content: flex-end;
 	align-items: center;
 	gap: 6px;
+	min-width: 0;
+}
+
+.gm-mm__row:hover:has(.gm-mm__row-action) .gm-mm__row-badges,
+.gm-mm__row:focus-within:has(.gm-mm__row-action) .gm-mm__row-badges {
+	visibility: hidden;
+}
+
+/* No hover on touch screens: the buttons are always shown, so they sit
+   left of the badges instead of on top of them. */
+@media (hover: none) {
+	.gm-mm__col-actions {
+		width: auto;
+		min-width: 120px;
+		gap: 4px;
+	}
+
+	.gm-mm__row-buttons {
+		position: static;
+		transform: none;
+	}
+
+	.gm-mm__row:hover:has(.gm-mm__row-action) .gm-mm__row-badges,
+	.gm-mm__row:focus-within:has(.gm-mm__row-action) .gm-mm__row-badges {
+		visibility: visible;
+	}
 }
 
 .gm-mm__row-avatar {

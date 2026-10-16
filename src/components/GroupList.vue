@@ -328,7 +328,9 @@ export default {
    box --gf-row-input tall in a row of that same height. */
 .gm-list__search {
 	--default-clickable-area: calc(var(--gf-row-input) + 4px);
-	padding: 0 12px;
+	/* 10px + the wrapper's own 2px: the box starts at 12px, like the pills
+	   and the section label. */
+	padding: 0 10px;
 	margin: -2px 0 !important;
 }
 

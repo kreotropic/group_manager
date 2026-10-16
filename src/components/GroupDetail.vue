@@ -726,7 +726,7 @@ export default {
 	margin: 0 -28px;
 	padding: 10px 28px 14px;
 	border-top: 1px solid var(--color-border-dark);
-	background: var(--color-main-background);
+	background: var(--color-background-hover);
 }
 
 .gm-detail__footer-summary {

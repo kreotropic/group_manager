@@ -1068,7 +1068,7 @@ export default {
 }
 
 .gm-fm__row--changed {
-	background: var(--color-main-background);
+	background: var(--color-background-hover);
 }
 
 .gm-fm__col-name {

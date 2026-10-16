@@ -120,14 +120,15 @@ export default {
 		t,
 
 		/**
-		 * The member lists reserve their scrollbar lane and push it out into
+		 * The member list reserves its scrollbar lane and pushes it out into
 		 * the panel's right padding (see --gm-scrollbar-w in admin.css), so
 		 * the rows line up with the fixed parts above. The lane is as wide as
-		 * the platform's scrollbar, which is only knowable by measuring one.
+		 * the platform's thin scrollbar (the list sets scrollbar-width: thin),
+		 * which is only knowable by measuring one with the same style.
 		 */
 		measureScrollbar() {
 			const probe = document.createElement('div')
-			probe.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:100px;overflow-y:auto;scrollbar-gutter:stable'
+			probe.style.cssText = 'position:absolute;visibility:hidden;width:100px;height:100px;overflow-y:auto;scrollbar-gutter:stable;scrollbar-width:thin'
 			this.$el.appendChild(probe)
 			const width = probe.offsetWidth - probe.clientWidth
 			this.$el.removeChild(probe)
@@ -321,15 +322,16 @@ export default {
 	position: relative;
 }
 
-/* A card like the group list beside it (GroupList.vue), same radius, in a
-   different grey so the two areas read apart: lighter than the list's
-   --color-background-dark in the light theme, darker in the dark one.
-   Fields and hovered rows inside it use the main background. */
+/* A card like the group list beside it (GroupList.vue), same radius: white
+   with a border, next to the list's grey. The border is an inset outline:
+   a real one pushed the content 1px off the list's row grid. */
 .gm-detail {
 	flex: 1;
 	min-width: 0;
+	outline: 1px solid var(--color-border);
+	outline-offset: -1px;
 	border-radius: var(--border-radius-container-large, 14px);
-	background: var(--color-background-hover);
+	background: var(--color-main-background);
 	display: flex;
 	overflow: hidden;
 }
