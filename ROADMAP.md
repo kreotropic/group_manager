@@ -141,6 +141,53 @@ this has not been checked systematically against the 4.5:1 minimum for
 secondary text across every screen and both themes, only spot-checked
 during development.
 
+### 4. Edit and create users from the member list
+
+Planned, not started. Clicking a member opens their account for editing
+(phase A); creating a user from the add field comes after (phase B).
+
+**Approach.** The frontend calls core's OCS provisioning API directly, so
+no new PHP: `GET cloud/users/{uid}` (with the backend's capabilities) and
+`GET cloud/users/{uid}/editable` to read, `PUT cloud/users/{uid}` (one
+key/value per field) to edit, `PUT .../enable` / `.../disable`,
+`POST cloud/users` to create and `POST .../welcome` to resend the welcome
+email. Validation, password policy, rate limiting and the audit log are
+then core's own, and subadmin rules come for free should the app ever be
+opened to group admins. Checked against Nextcloud 35: every one of these
+endpoints requires password confirmation (the app already handles it), and
+editing is rate-limited to 50 changes per 10 minutes. `IUser::canChange*()`
+tells which fields an LDAP account can't change; those are shown disabled,
+with the reason.
+
+**Phase A: edit.**
+- Opened from the member's name or avatar (a real button, Enter works), not
+  the whole row, so it doesn't compete with the row's action zone.
+- A side panel inside the group card, over the member list, so the group
+  stays in view and its staged changes are kept.
+- Editable: display name, email, personal quota, enabled; password for
+  local accounts only (LDAP gets "resend welcome email").
+- Read-only: user ID, origin, last login, storage used, the other groups
+  (clickable, to jump to them) and the groups they administer.
+- Its own Save, applied immediately: a user edit is not a group change, so
+  it stays out of the group's Apply bar.
+- Guards: you can't disable your own account; disabling a member of the
+  admin group asks first; the personal quota field says when Group Quota
+  overrides it, as the Quota tab does.
+
+**Phase B: create.** When a search in the add field finds no one, offer
+"Create user 'xyz'", opening a dialog prefilled with that text: user ID,
+display name, email, a password or an email invitation (needs mail
+configured), quota, and the current group already ticked. Creation is
+immediate (Discard can't undo it) and for local accounts only.
+
+**Open decisions:**
+1. A side panel inside the card (preferred) or a modal dialog (simpler)?
+2. Phase A fields: the list above, or also language, manager and the
+   profile fields (phone, organisation, role…)?
+3. Allow deleting users here, or leave that to Nextcloud's Users page
+   (disabling is enough here)?
+4. Administrators only, or open user editing to group admins later?
+
 ## Post-launch: only if there's traction
 
 - **Bulk permission/quota edits across multiple folders at once**, the way
