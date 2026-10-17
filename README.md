@@ -70,12 +70,21 @@ Manager is that screen.
   allows that, from the core Users page) are listed above the members and
   can be revoked. The `admin` group can't get group admins, as in Nextcloud's
   own provisioning API: one could add themselves to `admin`.
+- **Users**: switch the left column to **Users** to search every account
+  and edit it on the right: account fields, personal quota, language,
+  manager and profile in one tab, group memberships and group admin roles in
+  another, applied together. Enable, disable or delete an account, resend
+  its welcome email, or create a new one. Changes go through Nextcloud's own
+  provisioning API, so its password policy and validation apply; fields an
+  LDAP backend owns are shown read-only.
 - **LDAP groups are read-only where they have to be**: you can't add or
   remove an LDAP group's members here (that's the directory's job), and the
   panel says so with the group's DN. Everything else (browsing, group admins
   and folder assignment) works the same as for a local group.
 - **Optional top bar shortcut**: each admin can pin Group Manager to the
   Nextcloud top bar from the groups list's menu (off by default).
+- **Resizable columns**: drag the gap between the list and the panel; the
+  width is remembered per browser.
 - **Keyboard-friendly**: arrow keys and Enter drive the add-field dropdown,
   Esc closes it, and switching to a different group while changes are still
   queued asks for confirmation first.
@@ -106,6 +115,10 @@ change joins the same queue as everything else and is applied with
 Creating and deleting *groups themselves* (as opposed to editing an existing
 one's membership) is also done from this screen: **Create group** at the
 bottom of the list, **Delete group** in a group's own header.
+
+To manage accounts, switch the list's **Groups | Users** control to
+**Users** and pick someone; **Create user** is at the bottom of that list,
+and enabling, disabling and deleting are in the account's **⋯** menu.
 
 ## Known Limitations
 

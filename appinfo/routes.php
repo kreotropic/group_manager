@@ -17,6 +17,11 @@ return [
         ['name' => 'preferences#show', 'url' => '/api/preferences', 'verb' => 'GET'],
         ['name' => 'preferences#setQuickAccess', 'url' => '/api/preferences/quick-access', 'verb' => 'PUT'],
 
+        ['name' => 'user#index', 'url' => '/api/users', 'verb' => 'GET'],
+        // Not /api/users/options: a user may well be called "options".
+        ['name' => 'user#options', 'url' => '/api/user-options', 'verb' => 'GET'],
+        ['name' => 'user#show', 'url' => '/api/users/{uid}', 'verb' => 'GET', 'requirements' => ['uid' => '[^/]+']],
+
         ['name' => 'group#index', 'url' => '/api/groups', 'verb' => 'GET'],
         ['name' => 'group#create', 'url' => '/api/groups', 'verb' => 'POST'],
         ['name' => 'group#candidates', 'url' => '/api/groups/{gid}/candidates', 'verb' => 'GET', 'requirements' => ['gid' => '[^/]+']],

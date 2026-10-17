@@ -4,7 +4,7 @@
  */
 
 import axios from '@nextcloud/axios'
-import { generateUrl } from '@nextcloud/router'
+import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 
 const base = (path) => generateUrl('/apps/group_manager' + path)
 
@@ -252,4 +252,87 @@ export async function fetchQuickAccess() {
 export async function saveQuickAccess(enabled) {
 	const { data } = await axios.put(base('/api/preferences/quick-access'), { enabled })
 	return data.quickAccess
+}
+
+/**
+ * A page of accounts for the Users view: { users, hasMore }. filter is
+ * 'all' or 'disabled'; pageSize, not limit (see fetchGroupMembers()).
+ */
+export async function fetchUsers({ search = '', pageSize = 50, offset = 0, filter = 'all' } = {}) {
+	const { data } = await axios.get(base('/api/users'), { params: { search, pageSize, offset, filter } })
+	return data
+}
+
+/**
+ * This app's own summary of one account, with quotaSetting: the raw
+ * setting ('default', 'none' or a size), which core's details don't give.
+ */
+export async function fetchUserSummary(uid) {
+	const { data } = await axios.get(base('/api/users/' + encodeURIComponent(uid)))
+	return data
+}
+
+/**
+ * What the edit and create forms need from the server's configuration:
+ * { currentUser, languages, quotaPresets, defaultQuota, sendEmail,
+ * requireEmail, generateUserId }.
+ */
+export async function fetchUserOptions() {
+	const { data } = await axios.get(base('/api/user-options'))
+	return data
+}
+
+// Everything below writes through core's provisioning API (OCS), so core's
+// own validation, password policy, rate limits and audit log apply. Every
+// write there needs a recent password confirmation.
+
+const ocs = (path) => generateOcsUrl('cloud/users' + path)
+const ocsConfig = { headers: { 'OCS-APIRequest': 'true' }, params: { format: 'json' } }
+
+/**
+ * Core's full details for one account: fields, profile properties, groups,
+ * subadmin groups, quota usage and backendCapabilities.
+ */
+export async function fetchUserDetails(uid) {
+	const { data } = await axios.get(ocs('/' + encodeURIComponent(uid)), ocsConfig)
+	return data.ocs.data
+}
+
+/**
+ * The account and profile properties this account's backend lets anyone
+ * change (an LDAP-mapped field is left out).
+ */
+export async function fetchUserEditableFields(uid) {
+	const { data } = await axios.get(generateOcsUrl('cloud/user/fields/' + encodeURIComponent(uid)), ocsConfig)
+	return data.ocs.data
+}
+
+/**
+ * One field per call: that is the only edit endpoint on every supported
+ * version (the multi-field one is newer). Core rate-limits it to 50 calls
+ * per 10 minutes.
+ */
+export async function editUserField(uid, key, value) {
+	await axios.put(ocs('/' + encodeURIComponent(uid)), { key, value }, ocsConfig)
+}
+
+export async function setUserEnabled(uid, enabled) {
+	await axios.put(ocs('/' + encodeURIComponent(uid) + (enabled ? '/enable' : '/disable')), {}, ocsConfig)
+}
+
+/**
+ * Create an account. With an email and no password, core sends the
+ * invitation to set one (when new-user emails are enabled). Returns the id.
+ */
+export async function createUser(params) {
+	const { data } = await axios.post(ocs(''), params, ocsConfig)
+	return data.ocs.data.id
+}
+
+export async function deleteUser(uid) {
+	await axios.delete(ocs('/' + encodeURIComponent(uid)), ocsConfig)
+}
+
+export async function resendWelcomeEmail(uid) {
+	await axios.post(ocs('/' + encodeURIComponent(uid) + '/welcome'), {}, ocsConfig)
 }

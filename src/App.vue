@@ -8,36 +8,95 @@
 			{{ loadError }}
 		</NcNoteCard>
 
-		<div class="gm-layout">
-			<GroupList :groups="groups"
+		<div ref="layout"
+			class="gm-layout"
+			:class="{ 'gm-layout--resizing': resizing }"
+			:style="{ '--gm-list-w': listWidth + 'px' }">
+			<GroupList v-show="mode === 'groups'"
+				:groups="groups"
 				:loading="loading"
 				:selected-id="selectedId"
 				:quick-access="quickAccess"
 				@toggle-quick-access="toggleQuickAccess"
 				@select="selectGroup"
-				@create="showCreateDialog = true" />
+				@create="showCreateDialog = true"
+				@switch-mode="switchMode" />
+			<!-- Mounted on first use, then kept: switching back and forth
+			     keeps the search, the filter and the loaded pages. -->
+			<UserList v-if="usersVisited"
+				v-show="mode === 'users'"
+				ref="userList"
+				:selected-uid="selectedUid"
+				:quick-access="quickAccess"
+				@toggle-quick-access="toggleQuickAccess"
+				@select="selectUser"
+				@create="showCreateUserDialog = true"
+				@switch-mode="switchMode" />
+
+			<!-- Drag to share the width between the list and the panel; the
+			     arrow keys move it too, a double click restores the default. -->
+			<div class="gm-splitter"
+				role="separator"
+				tabindex="0"
+				aria-orientation="vertical"
+				:aria-label="t('group_manager', 'Resize the list')"
+				:aria-valuenow="listWidth"
+				:aria-valuemin="minListWidth"
+				:aria-valuemax="maxListWidth()"
+				:title="t('group_manager', 'Drag to resize, double-click to reset')"
+				@pointerdown="startResize"
+				@keydown="onSplitterKey"
+				@dblclick="setListWidth(defaultListWidth, true)" />
 
 			<div class="gm-detail">
-				<NcEmptyContent v-if="!selectedId"
-					class="gm-detail__empty"
-					:name="t('group_manager', 'Select a group')"
-					:description="t('group_manager', 'Choose a group on the left to see its details and members.')">
-					<template #icon>
-						<AccountMultiple :size="48" />
-					</template>
-				</NcEmptyContent>
-				<GroupDetail v-else
-					:key="selectedId"
-					:group-id="selectedId"
-					@renamed="onGroupRenamed"
-					@deleted="onGroupDeleted"
-					@pending-changed="onDetailPendingChanged" />
+				<template v-if="mode === 'groups'">
+					<NcEmptyContent v-if="!selectedId"
+						class="gm-detail__empty"
+						:name="t('group_manager', 'Select a group')"
+						:description="t('group_manager', 'Choose a group on the left to see its details and members.')">
+						<template #icon>
+							<AccountMultiple :size="48" />
+						</template>
+					</NcEmptyContent>
+					<GroupDetail v-else
+						:key="selectedId"
+						:group-id="selectedId"
+						@renamed="onGroupRenamed"
+						@deleted="onGroupDeleted"
+						@pending-changed="onDetailPendingChanged" />
+				</template>
+				<template v-else>
+					<NcEmptyContent v-if="!selectedUid || !userOptions"
+						class="gm-detail__empty"
+						:name="t('group_manager', 'Select a user')"
+						:description="t('group_manager', 'Choose a user on the left to edit their account, profile and groups.')">
+						<template #icon>
+							<AccountOutline :size="48" />
+						</template>
+					</NcEmptyContent>
+					<UserDetail v-else
+						:key="selectedUid"
+						:uid="selectedUid"
+						:options="userOptions"
+						:groups="groups"
+						@updated="onUserUpdated"
+						@deleted="onUserDeleted"
+						@groups-changed="refreshGroups"
+						@pending-changed="onDetailPendingChanged" />
+				</template>
 			</div>
 		</div>
 
 		<CreateGroupDialog :open="showCreateDialog"
 			@update:open="showCreateDialog = $event"
 			@created="onGroupCreated" />
+
+		<CreateUserDialog v-if="userOptions"
+			:open="showCreateUserDialog"
+			:options="userOptions"
+			:groups="groups"
+			@update:open="showCreateUserDialog = $event"
+			@created="onUserCreated" />
 
 		<div class="gm-sr-only" role="status" aria-live="polite">{{ announcement }}</div>
 	</div>
@@ -49,12 +108,41 @@ import { showSuccess, showError } from '@nextcloud/dialogs'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import AccountMultiple from 'vue-material-design-icons/AccountMultiple.vue'
+import AccountOutline from 'vue-material-design-icons/AccountOutline.vue'
 import GroupList from './components/GroupList.vue'
 import GroupDetail from './components/GroupDetail.vue'
 import CreateGroupDialog from './components/CreateGroupDialog.vue'
-import { fetchGroups, fetchQuickAccess, saveQuickAccess } from './services/api.js'
+import UserList from './components/UserList.vue'
+import UserDetail from './components/UserDetail.vue'
+import CreateUserDialog from './components/CreateUserDialog.vue'
+import { fetchGroups, fetchQuickAccess, fetchUserOptions, saveQuickAccess } from './services/api.js'
 import { extractErrorMessage } from './utils/errors.js'
-import { readGroupIdFromHash, pushGroupHash } from './utils/hash.js'
+import { readSelectionFromHash, pushSelectionHash } from './utils/hash.js'
+
+const DEFAULT_LIST_WIDTH = 296
+const MIN_LIST_WIDTH = 240
+const MAX_LIST_WIDTH = 720
+// The panel never gets narrower than this while dragging.
+const MIN_DETAIL_WIDTH = 420
+const LIST_WIDTH_KEY = 'group_manager:list-width'
+
+/** Per-browser convenience; storage can be missing or blocked. */
+function readStoredWidth() {
+	try {
+		const value = Number.parseInt(window.localStorage.getItem(LIST_WIDTH_KEY), 10)
+		return Number.isFinite(value) ? value : null
+	} catch {
+		return null
+	}
+}
+
+function storeWidth(value) {
+	try {
+		window.localStorage.setItem(LIST_WIDTH_KEY, String(value))
+	} catch {
+		// Not remembered, nothing else lost.
+	}
+}
 
 export default {
 	name: 'App',
@@ -63,9 +151,13 @@ export default {
 		NcNoteCard,
 		NcEmptyContent,
 		AccountMultiple,
+		AccountOutline,
 		GroupList,
 		GroupDetail,
 		CreateGroupDialog,
+		UserList,
+		UserDetail,
+		CreateUserDialog,
 	},
 
 	data() {
@@ -73,8 +165,15 @@ export default {
 			groups: [],
 			loading: true,
 			loadError: '',
+			// 'groups' or 'users': which list and panel are showing.
+			mode: 'groups',
+			usersVisited: false,
 			selectedId: null,
+			selectedUid: null,
+			userOptions: null,
 			showCreateDialog: false,
+			showCreateUserDialog: false,
+			// Unapplied changes in whichever panel is open (group or user).
 			hasPendingMemberChanges: false,
 			// GM-08: a batch is being sent right now (GroupDetail's own
 			// applying, covering both its members and folders managers) --
@@ -85,7 +184,7 @@ export default {
 			applyingChanges: false,
 			// This app's own monotonic position in the navigation stack,
 			// mirrored into history.state by pushHistory() -- see
-			// onPopState() and utils/hash.js's pushGroupHash().
+			// onPopState() and utils/hash.js's pushSelectionHash().
 			historyIndex: 0,
 			// Set right before this app calls history.go() itself, so the
 			// popstate that generates is recognized as our own reversal
@@ -93,6 +192,10 @@ export default {
 			suppressNextPopState: false,
 			announcement: '',
 			quickAccess: false,
+			listWidth: readStoredWidth() ?? DEFAULT_LIST_WIDTH,
+			defaultListWidth: DEFAULT_LIST_WIDTH,
+			minListWidth: MIN_LIST_WIDTH,
+			resizing: false,
 		}
 	},
 
@@ -101,19 +204,29 @@ export default {
 		window.addEventListener('popstate', this.onPopState)
 		window.addEventListener('beforeunload', this.onBeforeUnload)
 
+		window.addEventListener('resize', this.onWindowResize)
+		this.$nextTick(() => this.setListWidth(this.listWidth))
+
 		fetchQuickAccess().then((v) => { this.quickAccess = v }).catch(() => {})
+		fetchUserOptions().then((v) => { this.userOptions = v }).catch(() => {})
 		await this.loadGroups()
 
-		// Deep-link support: #group=<gid>, only honoured if that group still exists.
-		const hashGid = readGroupIdFromHash()
-		if (hashGid && this.groups.some((g) => g.id === hashGid)) {
-			this.selectedId = hashGid
+		// Deep links: #group=<gid> (only if that group still exists),
+		// #user=<uid> and #users.
+		const { mode, id } = readSelectionFromHash()
+		if (mode === 'users') {
+			this.mode = 'users'
+			this.usersVisited = true
+			this.selectedUid = id
+		} else if (id && this.groups.some((g) => g.id === id)) {
+			this.selectedId = id
 		}
 	},
 
 	beforeUnmount() {
 		window.removeEventListener('popstate', this.onPopState)
 		window.removeEventListener('beforeunload', this.onBeforeUnload)
+		window.removeEventListener('resize', this.onWindowResize)
 	},
 
 	methods: {
@@ -190,7 +303,32 @@ export default {
 			}
 			this.hasPendingMemberChanges = false
 			this.selectedId = gid
-			this.pushHistory(gid)
+			this.pushHistory()
+		},
+
+		selectUser(uid) {
+			if (uid === this.selectedUid) {
+				return
+			}
+			if (!this.confirmNavigateAway()) {
+				return
+			}
+			this.hasPendingMemberChanges = false
+			this.selectedUid = uid
+			this.pushHistory()
+		},
+
+		/** Groups ⇄ Users: a navigation like any other, guarded the same way. */
+		switchMode(mode) {
+			if (mode === this.mode || !this.confirmNavigateAway()) {
+				return
+			}
+			this.hasPendingMemberChanges = false
+			this.mode = mode
+			if (mode === 'users') {
+				this.usersVisited = true
+			}
+			this.pushHistory()
 		},
 
 		/**
@@ -209,19 +347,19 @@ export default {
 			if (!this.hasPendingMemberChanges) {
 				return true
 			}
-			return window.confirm(
-				t('group_manager', 'You have unapplied member changes for this group. Discard them and switch groups?'),
-			)
+			return window.confirm(this.mode === 'users'
+				? t('group_manager', 'You have unapplied changes for this user. Discard them?')
+				: t('group_manager', 'You have unapplied member changes for this group. Discard them and switch groups?'))
 		},
 
 		/**
-		 * pushGroupHash() plus keeping historyIndex in step with it — every
-		 * caller that pushes a new entry goes through here so the two never
-		 * drift apart.
+		 * pushSelectionHash() for the current view and selection, plus
+		 * keeping historyIndex in step with it — every caller that pushes a
+		 * new entry goes through here so the two never drift apart.
 		 */
-		pushHistory(gid) {
+		pushHistory() {
 			this.historyIndex++
-			pushGroupHash(gid, this.historyIndex)
+			pushSelectionHash(this.mode, this.mode === 'users' ? this.selectedUid : this.selectedId, this.historyIndex)
 		},
 
 		/**
@@ -241,7 +379,7 @@ export default {
 
 			const targetIndex = event.state?.index ?? 0
 			const delta = targetIndex - this.historyIndex
-			const gid = event.state?.groupId ?? readGroupIdFromHash()
+			const target = event.state?.mode ? event.state : readSelectionFromHash()
 
 			if (!this.confirmNavigateAway()) {
 				if (delta !== 0) {
@@ -253,7 +391,13 @@ export default {
 
 			this.hasPendingMemberChanges = false
 			this.historyIndex = targetIndex
-			this.selectedId = gid && this.groups.some((g) => g.id === gid) ? gid : null
+			this.mode = target.mode
+			if (target.mode === 'users') {
+				this.usersVisited = true
+				this.selectedUid = target.id ?? null
+			} else {
+				this.selectedId = target.id && this.groups.some((g) => g.id === target.id) ? target.id : null
+			}
 		},
 
 		onBeforeUnload(event) {
@@ -289,9 +433,99 @@ export default {
 			if (this.selectedId === gid) {
 				this.hasPendingMemberChanges = false
 				this.selectedId = null
-				this.pushHistory(null)
+				this.pushHistory()
 			}
 			showSuccess(t('group_manager', 'Group "{name}" deleted.', { name: group?.displayName ?? gid }))
+		},
+
+		/**
+		 * After a user's memberships changed: the member counts in the group
+		 * list, quietly (no skeleton, no announcement).
+		 */
+		async refreshGroups() {
+			try {
+				this.groups = this.sortGroups(await fetchGroups())
+			} catch {
+				// Stale counts until the next load.
+			}
+		},
+
+		onUserCreated(uid) {
+			this.showCreateUserDialog = false
+			this.$refs.userList?.reload()
+			this.selectUser(uid)
+			this.refreshGroups()
+			showSuccess(t('group_manager', 'User "{uid}" created.', { uid }))
+		},
+
+		onUserUpdated(summary) {
+			this.$refs.userList?.updateUser(summary)
+		},
+
+		onUserDeleted(uid) {
+			this.$refs.userList?.removeUser(uid)
+			if (this.selectedUid === uid) {
+				this.hasPendingMemberChanges = false
+				this.selectedUid = null
+				this.pushHistory()
+			}
+			this.refreshGroups()
+			showSuccess(t('group_manager', 'User "{uid}" deleted.', { uid }))
+		},
+
+		maxListWidth() {
+			const total = this.$refs.layout?.clientWidth ?? 0
+			return Math.max(MIN_LIST_WIDTH, Math.min(MAX_LIST_WIDTH, total - MIN_DETAIL_WIDTH))
+		},
+
+		setListWidth(value, save = false) {
+			this.listWidth = Math.round(Math.min(Math.max(value, MIN_LIST_WIDTH), this.maxListWidth()))
+			if (save) {
+				storeWidth(this.listWidth)
+			}
+		},
+
+		/** A narrower window can leave a stored width too wide for it. */
+		onWindowResize() {
+			this.setListWidth(readStoredWidth() ?? this.listWidth)
+		},
+
+		startResize(event) {
+			if (event.button !== 0) {
+				return
+			}
+			event.preventDefault()
+			const splitter = event.currentTarget
+			const left = this.$refs.layout.getBoundingClientRect().left
+			splitter.setPointerCapture(event.pointerId)
+			this.resizing = true
+			const move = (e) => this.setListWidth(e.clientX - left)
+			const stop = () => {
+				splitter.removeEventListener('pointermove', move)
+				splitter.removeEventListener('pointerup', stop)
+				splitter.removeEventListener('pointercancel', stop)
+				this.resizing = false
+				storeWidth(this.listWidth)
+			}
+			splitter.addEventListener('pointermove', move)
+			splitter.addEventListener('pointerup', stop)
+			splitter.addEventListener('pointercancel', stop)
+		},
+
+		onSplitterKey(event) {
+			const step = event.shiftKey ? 64 : 16
+			if (event.key === 'ArrowLeft') {
+				this.setListWidth(this.listWidth - step, true)
+			} else if (event.key === 'ArrowRight') {
+				this.setListWidth(this.listWidth + step, true)
+			} else if (event.key === 'Home') {
+				this.setListWidth(MIN_LIST_WIDTH, true)
+			} else if (event.key === 'End') {
+				this.setListWidth(this.maxListWidth(), true)
+			} else {
+				return
+			}
+			event.preventDefault()
 		},
 
 		/**
@@ -317,9 +551,52 @@ export default {
 	display: flex;
 	height: calc(100vh - 130px);
 	min-height: 480px;
-	gap: 12px;
 	overflow: hidden;
 	position: relative;
+}
+
+/* No text selection or hover effects in the panels while dragging. */
+.gm-layout--resizing {
+	cursor: col-resize;
+	user-select: none;
+}
+
+.gm-layout--resizing > :not(.gm-splitter) {
+	pointer-events: none;
+}
+
+/* The 12px gap between the two cards is the handle; a thin bar shows on
+   hover, keyboard focus and while dragging. */
+.gm-splitter {
+	flex: none;
+	position: relative;
+	width: 12px;
+	cursor: col-resize;
+	touch-action: none;
+	outline: none;
+}
+
+.gm-splitter::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 4px;
+	width: 4px;
+	height: 48px;
+	transform: translateY(-50%);
+	border-radius: 2px;
+	background: transparent;
+	transition: background-color .15s, height .15s;
+}
+
+.gm-splitter:hover::after {
+	background: var(--color-border-maxcontrast);
+}
+
+.gm-splitter:focus-visible::after,
+.gm-layout--resizing .gm-splitter::after {
+	height: 96px;
+	background: var(--color-primary-element);
 }
 
 /* A card like the group list beside it (GroupList.vue), same radius: white

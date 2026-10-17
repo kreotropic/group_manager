@@ -7,9 +7,11 @@
  * GroupServiceException responses already carry a human-readable message
  * (`error`) and a stable `code` — this just extracts the former with a
  * fallback for network errors / anything that isn't our own API shape.
+ * Core's OCS errors (the Users view writes through them) carry theirs in
+ * ocs.meta.message, often empty, hence the fallback there too.
  */
 export function extractErrorMessage(err, fallback) {
-	return err?.response?.data?.error || fallback
+	return err?.response?.data?.error || err?.response?.data?.ocs?.meta?.message || fallback
 }
 
 /**

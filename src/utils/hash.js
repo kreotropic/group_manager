@@ -12,33 +12,51 @@
 // hashchange fire immediately after our own pushState. A slash-free hash
 // isn't claimed by that router and survives untouched.
 const GROUP_HASH_PREFIX = '#group='
+const USER_HASH_PREFIX = '#user='
+// The Users view with nobody selected.
+const USERS_HASH = '#users'
 
 /**
- * Read the selected group id from the current URL hash, if any.
+ * The view and selection the current URL hash points at:
+ * { mode: 'groups' | 'users', id: string | null }.
  */
-export function readGroupIdFromHash() {
+export function readSelectionFromHash() {
 	const hash = window.location.hash
-	if (!hash.startsWith(GROUP_HASH_PREFIX)) {
-		return null
+	const decode = (prefix) => {
+		const encoded = hash.slice(prefix.length)
+		return encoded ? decodeURIComponent(encoded) : null
 	}
-	const encoded = hash.slice(GROUP_HASH_PREFIX.length)
-	return encoded ? decodeURIComponent(encoded) : null
+	if (hash.startsWith(USER_HASH_PREFIX)) {
+		return { mode: 'users', id: decode(USER_HASH_PREFIX) }
+	}
+	if (hash === USERS_HASH) {
+		return { mode: 'users', id: null }
+	}
+	if (hash.startsWith(GROUP_HASH_PREFIX)) {
+		return { mode: 'groups', id: decode(GROUP_HASH_PREFIX) }
+	}
+	return { mode: 'groups', id: null }
 }
 
 /**
- * Push a new history entry pointing at `gid` (or strip the hash entirely
- * when `gid` is null). Pushing (not replacing) lets the browser's back/
- * forward buttons step through previously selected groups.
+ * Push a new history entry for a view and selection (a bare page URL for
+ * the Groups view with nothing selected). Pushing, not replacing, lets the
+ * browser's back/forward buttons step through earlier selections.
  *
  * `index` (GM-08) is the caller's own monotonic navigation counter, carried
- * in `state` alongside `groupId`. It's what a popstate handler compares
- * against its last-known position to tell how far a Back/Forward jump moved
- * (and in which direction), which is what makes reverting a declined jump
- * with `history.go()` possible — comparing groupId alone can't do that (an
+ * in `state`. It's what a popstate handler compares against its last-known
+ * position to tell how far a Back/Forward jump moved (and in which
+ * direction), which is what makes reverting a declined jump with
+ * `history.go()` possible — comparing the selection alone can't do that (an
  * older AND a newer entry both plausibly point at some other group).
  */
-export function pushGroupHash(gid, index) {
+export function pushSelectionHash(mode, id, index) {
 	const base = window.location.pathname + window.location.search
-	const url = gid ? `${base}${GROUP_HASH_PREFIX}${encodeURIComponent(gid)}` : base
-	window.history.pushState({ groupId: gid, index }, '', url)
+	let hash = ''
+	if (mode === 'users') {
+		hash = id ? USER_HASH_PREFIX + encodeURIComponent(id) : USERS_HASH
+	} else if (id) {
+		hash = GROUP_HASH_PREFIX + encodeURIComponent(id)
+	}
+	window.history.pushState({ mode, id, index }, '', base + hash)
 }

@@ -6,7 +6,19 @@
 	<nav class="gm-list" :aria-label="t('group_manager', 'Groups')">
 		<div class="gm-list__top">
 			<div class="gm-list__header">
-				<h2 class="gm-list__title">{{ t('group_manager', 'Groups') }}</h2>
+				<div class="gm-list__modes" role="group" :aria-label="t('group_manager', 'Show')">
+					<button type="button"
+						class="gm-list__mode gm-list__mode--active"
+						aria-pressed="true">
+						{{ t('group_manager', 'Groups') }}
+					</button>
+					<button type="button"
+						class="gm-list__mode"
+						aria-pressed="false"
+						@click="$emit('switch-mode', 'users')">
+						{{ t('group_manager', 'Users') }}
+					</button>
+				</div>
 				<NcActions class="gm-list__options" :aria-label="t('group_manager', 'Options')">
 					<NcActionCheckbox :model-value="quickAccess"
 						@update:model-value="$emit('toggle-quick-access')">
@@ -169,7 +181,7 @@ export default {
 		},
 	},
 
-	emits: ['select', 'create', 'toggle-quick-access'],
+	emits: ['select', 'create', 'toggle-quick-access', 'switch-mode'],
 
 	data() {
 		return {
@@ -285,269 +297,4 @@ export default {
 }
 </script>
 
-<style scoped>
-.gm-list {
-	width: 296px;
-	flex: none;
-	display: flex;
-	flex-direction: column;
-	gap: var(--gf-row-gap);
-	box-sizing: border-box;
-	height: 100%;
-	min-height: 0;
-	padding-top: var(--gf-pad-top);
-	border-radius: var(--border-radius-container-large, 14px);
-	background: var(--color-background-dark);
-}
-
-.gm-list__top {
-	flex: none;
-	display: flex;
-	flex-direction: column;
-	gap: var(--gf-row-gap);
-}
-
-.gm-list__header {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	height: var(--gf-row-header);
-	padding: 0 8px 0 20px;
-	--default-clickable-area: 32px;
-}
-
-.gm-list__title {
-	flex-shrink: 0;
-	margin: 0;
-	font-size: 20px;
-	font-weight: 600;
-}
-
-/* NcTextField draws its box 2px inside its wrapper on each side (room for
-   the focus ring): 4px more, taken back with the margin, makes the visible
-   box --gf-row-input tall in a row of that same height. */
-.gm-list__search {
-	--default-clickable-area: calc(var(--gf-row-input) + 4px);
-	/* 10px + the wrapper's own 2px: the box starts at 12px, like the pills
-	   and the section label. */
-	padding: 0 10px;
-	margin: -2px 0 !important;
-}
-
-/* Segmented control: a darker pill track, the active option lifted out of
-   it on the main background. */
-.gm-list__options {
-	margin-left: auto;
-}
-
-/* A row of its own: on the title's line it didn't fit beside the options
-   menu in the list's width. */
-.gm-list__switch {
-	display: flex;
-	align-items: center;
-	height: var(--gf-row-switch);
-	padding: 0 12px;
-}
-
-.gm-list__filters {
-	flex: 1;
-	display: flex;
-	gap: 2px;
-	min-width: 0;
-	padding: 3px;
-	border-radius: var(--border-radius-pill);
-	background: var(--color-background-darker);
-}
-
-.gm-list__filters .gm-list__filter {
-	margin: 0;
-	min-height: 0;
-	flex: 1;
-	padding: 3px 10px;
-	white-space: nowrap;
-	border: none;
-	border-radius: var(--border-radius-pill);
-	background: transparent;
-	color: var(--color-main-text);
-	font-family: inherit;
-	font-size: 13px;
-	font-weight: 500;
-	cursor: pointer;
-}
-
-.gm-list__filters .gm-list__filter:hover {
-	background: color-mix(in srgb, var(--color-main-background) 50%, transparent);
-}
-
-.gm-list__filters .gm-list__filter--active,
-.gm-list__filters .gm-list__filter--active:hover {
-	background: var(--color-main-background);
-	color: var(--gm-primary-text);
-	font-weight: 600;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
-}
-
-.gm-list__scroll {
-	flex: 1;
-	min-height: 0;
-	overflow-x: hidden;
-	overflow-y: auto;
-	/* Thin bar without arrows; the gutter is reserved so the rows keep the
-	   same right margin whether or not the list scrolls. */
-	scrollbar-gutter: stable;
-	padding: 0 0 8px 8px;
-}
-
-.gm-list__section-header {
-	/* Sticks to the top once scrolled past and to the bottom while still
-	   below the fold, so a section further down is always labelled. */
-	position: sticky;
-	top: 0;
-	bottom: 0;
-	z-index: 1;
-	display: flex;
-	align-items: center;
-	box-sizing: border-box;
-	height: var(--gf-row-section);
-	background: var(--color-background-dark);
-	padding: 0 12px;
-	font-size: 11px;
-	font-weight: 700;
-	text-transform: uppercase;
-	letter-spacing: .09em;
-	color: var(--color-text-maxcontrast);
-}
-
-.gm-list__row {
-	font-weight: 400;
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	width: 100%;
-	/* NcAppNavigationItem's height; a row with a gid line under the name
-	   grows past it. */
-	min-height: var(--default-clickable-area);
-	box-sizing: border-box;
-	padding: 3px 8px;
-	border: none;
-	border-radius: var(--border-radius-element, 8px);
-	background: transparent;
-	color: var(--color-main-text);
-	text-align: left;
-	font-family: inherit;
-	cursor: pointer;
-}
-
-/* Core's button rule (margin 3px 3px 3px 0) outranks a single class. */
-.gm-list .gm-list__row {
-	margin: 0 0 2px;
-}
-
-/* The ring is for keyboard navigation only; a click must leave just the
-   active background. */
-.gm-list__row:focus:not(:focus-visible),
-.gm-list__filters .gm-list__filter:focus:not(:focus-visible) {
-	outline: none;
-	box-shadow: none;
-}
-
-.gm-list__filters .gm-list__filter--active:focus:not(:focus-visible) {
-	box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
-}
-
-/* !important to beat core's button:focus-visible ring (main text colour
-   plus a 4px shadow), which is !important too. */
-.gm-list .gm-list__row:focus-visible,
-.gm-list__filters .gm-list__filter:focus-visible {
-	outline: 2px solid var(--color-primary-element) !important;
-	outline-offset: -2px;
-	box-shadow: none !important;
-}
-
-.gm-list__row:hover {
-	background: var(--color-background-hover);
-}
-
-.gm-list__row--active,
-.gm-list__row--active:hover {
-	background: var(--color-main-background);
-	color: var(--gm-primary-text);
-	box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
-}
-
-.gm-list__row-main {
-	flex: 1;
-	min-width: 0;
-	display: flex;
-	flex-direction: column;
-}
-
-.gm-list__row-name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 14px;
-}
-
-.gm-list__row--active .gm-list__row-name {
-	font-weight: 600;
-}
-
-.gm-list__row-gid {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-family: monospace;
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-}
-
-.gm-list__row-warn {
-	flex-shrink: 0;
-	color: var(--color-warning-text);
-}
-
-.gm-list__row-count {
-	flex-shrink: 0;
-	font-variant-numeric: tabular-nums;
-}
-
-.gm-list__row-count--empty {
-	opacity: .7;
-}
-
-.gm-list__footer {
-	flex-shrink: 0;
-	padding: 12px;
-}
-
-.gm-skeleton-row {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	height: 40px;
-	padding: 0 8px;
-}
-
-.gm-skeleton-row::before {
-	content: '';
-	width: 28px;
-	height: 28px;
-	border-radius: var(--border-radius-large);
-	background: var(--color-background-darker);
-	animation: gm-skeleton-pulse 1.4s ease-in-out infinite;
-}
-
-.gm-skeleton-row__text {
-	height: 12px;
-	width: 60%;
-	border-radius: 6px;
-	background: var(--color-background-darker);
-	animation: gm-skeleton-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes gm-skeleton-pulse {
-	0%, 100% { opacity: 1; }
-	50% { opacity: 0.4; }
-}
-</style>
+<style scoped src="../styles/list.css"></style>

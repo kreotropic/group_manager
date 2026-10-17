@@ -8,6 +8,26 @@
 All notable changes to Group Manager are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- **Users view.** A Groups | Users switch at the top of the left column
+  lists every account (searchable, All / Disabled filter, loaded as you
+  scroll). The panel on the right edits the selected one in two tabs:
+  **Account & profile** (display name, email, password, personal quota with
+  usage, language, manager, and the profile fields) and **Groups** (add to
+  or remove from groups, make group admin), staged and applied with the same
+  Discard/Apply footer as a group. The account menu enables or disables it,
+  resends the welcome email or deletes it after a confirmation. **Create
+  user** opens a dialog for the ID, name, email, password (or an emailed
+  link to set one), groups, quota and language. Every write goes through
+  Nextcloud's own provisioning API, so its validation, password policy and
+  rate limits apply. Fields an account's backend (LDAP) owns are shown
+  disabled. Deep links: `#user=<id>` and `#users`.
+- **Resizable list.** Drag the gap between the list and the panel to share
+  the width differently (arrow keys work too, double-click resets); the
+  width is remembered per browser.
+
 ## [0.5.0] - 2026-10-15
 
 ### Added

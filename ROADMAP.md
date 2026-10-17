@@ -141,52 +141,39 @@ this has not been checked systematically against the 4.5:1 minimum for
 secondary text across every screen and both themes, only spot-checked
 during development.
 
-### 4. Edit and create users from the member list
+### 4. Edit and create users
 
-Planned, not started. Clicking a member opens their account for editing
-(phase A); creating a user from the add field comes after (phase B).
+**Built, unreleased.** It became its own view rather than a panel over the
+member list: a **Groups | Users** switch tops the left column, the Users list
+(server-side search, All / Disabled filter, paged as it scrolls) replaces the
+groups, and the right panel edits the selected account. The list and the
+panel share the width through a draggable divider (remembered per browser).
 
-**Approach.** The frontend calls core's OCS provisioning API directly, so
-no new PHP: `GET cloud/users/{uid}` (with the backend's capabilities) and
-`GET cloud/users/{uid}/editable` to read, `PUT cloud/users/{uid}` (one
-key/value per field) to edit, `PUT .../enable` / `.../disable`,
-`POST cloud/users` to create and `POST .../welcome` to resend the welcome
-email. Validation, password policy, rate limiting and the audit log are
-then core's own, and subadmin rules come for free should the app ever be
-opened to group admins. Checked against Nextcloud 35: every one of these
-endpoints requires password confirmation (the app already handles it), and
-editing is rate-limited to 50 changes per 10 minutes. `IUser::canChange*()`
-tells which fields an LDAP account can't change; those are shown disabled,
-with the reason.
+**Approach, as planned.** Reads of the list come from this app
+(`GET /api/users`, a light summary: core's `cloud/users/details` sets up
+every listed user's filesystem to report storage); the opened account's
+details, and every write, go to core's provisioning API directly: `GET
+cloud/users/{uid}`, `GET cloud/user/fields/{uid}` for the fields its backend
+lets anyone change (the plan had `.../editable`, which doesn't exist), `PUT
+cloud/users/{uid}` one field per call, `PUT .../enable|disable`, `POST
+cloud/users`, `DELETE cloud/users/{uid}`, `POST .../welcome`. Group
+membership and group admins reuse this app's own group endpoints.
 
-**Phase A: edit.**
-- Opened from the member's name or avatar (a real button, Enter works), not
-  the whole row, so it doesn't compete with the row's action zone.
-- A side panel inside the group card, over the member list, so the group
-  stays in view and its staged changes are kept.
-- Editable: display name, email, personal quota, enabled; password for
-  local accounts only (LDAP gets "resend welcome email").
-- Read-only: user ID, origin, last login, storage used, the other groups
-  (clickable, to jump to them) and the groups they administer.
-- Its own Save, applied immediately: a user edit is not a group change, so
-  it stays out of the group's Apply bar.
-- Guards: you can't disable your own account; disabling a member of the
-  admin group asks first; the personal quota field says when Group Quota
-  overrides it, as the Quota tab does.
+**Decisions taken (2026-10-17):**
+1. A view of its own with two tabs, **Account & profile** and **Groups**,
+   sharing one Discard/Apply footer like the group panel.
+2. Every field: display name, email, password (local accounts), personal
+   quota, language, manager, and the profile (phone, location, website,
+   organisation, role, headline, pronouns, fediverse, Bluesky, X, about,
+   profile enabled), each disabled with the reason when the backend owns it.
+   Properties the server's version doesn't know are left out.
+3. Deleting is allowed, behind a confirmation (and never your own account).
+4. Administrators only, like the rest of the app.
 
-**Phase B: create.** When a search in the add field finds no one, offer
-"Create user 'xyz'", opening a dialog prefilled with that text: user ID,
-display name, email, a password or an email invitation (needs mail
-configured), quota, and the current group already ticked. Creation is
-immediate (Discard can't undo it) and for local accounts only.
-
-**Open decisions:**
-1. A side panel inside the card (preferred) or a modal dialog (simpler)?
-2. Phase A fields: the list above, or also language, manager and the
-   profile fields (phone, organisation, role…)?
-3. Allow deleting users here, or leave that to Nextcloud's Users page
-   (disabling is enough here)?
-4. Administrators only, or open user editing to group admins later?
+**Still open:** creating a user from the group's add field when a search
+finds no one (the old phase B); the personal quota field doesn't yet say when
+Group Quota overrides it. Checked on Nextcloud 34 only so far; the 31–35
+matrix still has to run.
 
 ## Post-launch: only if there's traction
 
