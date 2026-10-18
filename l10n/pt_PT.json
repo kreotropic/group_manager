@@ -258,7 +258,6 @@
         "Account enabled.": "Conta ativada.",
         "Add to a group": "Adicionar a um grupo",
         "Add to a group…": "Adicionar a um grupo…",
-        "Admin only": "Só administrador",
         "Administrator": "Administrador",
         "An email address is required on this server.": "Este servidor exige um endereço de email.",
         "Bluesky": "Bluesky",
@@ -282,18 +281,12 @@
         "Fediverse (e.g. Mastodon)": "Fediverso (ex.: Mastodon)",
         "Filter by status": "Filtrar por estado",
         "Give a password, or an email address to send a link to set one.": "Indique uma palavra-passe, ou um email para enviar uma ligação para a definir.",
-        "Group": "Grupo",
-        "Group admin": "Administrador do grupo",
-        "Group admin of {group}": "Administrador do grupo {group}",
-        "Groups of this user": "Grupos deste utilizador",
         "Headline": "Título",
-        "Joining": "A entrar",
         "Language": "Idioma",
         "Last login": "Último acesso",
         "Leave empty to email the user a link to set their own.": "Deixe vazio para enviar ao utilizador uma ligação para definir a sua.",
         "Leave empty to have one generated. Cannot be changed later.": "Deixe vazio para ser gerado. Não pode ser alterado depois.",
         "Leave empty to keep the current one": "Deixe vazio para manter a atual",
-        "Leaving": "A sair",
         "Local account": "Conta local",
         "Location": "Localização",
         "Managed by the account's backend": "Gerido pelo backend da conta",
@@ -333,7 +326,6 @@
         "This will permanently delete the account \"{name}\" ({uid}), including all their files. This cannot be undone.": "Isto vai eliminar permanentemente a conta \"{name}\" ({uid}), incluindo todos os seus ficheiros. Esta ação não pode ser anulada.",
         "Too many changes in a short time. Wait a few minutes and try again.": "Demasiadas alterações em pouco tempo. Aguarde alguns minutos e tente novamente.",
         "Try a different search term or clear the filter.": "Experimente outro termo de pesquisa ou limpe o filtro.",
-        "Undo": "Anular",
         "Used to log in. Cannot be changed later.": "Usado para iniciar sessão. Não pode ser alterado depois.",
         "User \"{uid}\" created.": "Utilizador \"{uid}\" criado.",
         "User \"{uid}\" deleted.": "Utilizador \"{uid}\" eliminado.",
@@ -371,7 +363,10 @@
         "_%n group_::_%n groups_": [
             "%n grupo",
             "%n grupos"
-        ]
+        ],
+        "Also group admin of, without being a member:": "Também administrador de, sem ser membro:",
+        "Make group admin of {group}": "Tornar administrador do grupo {group}",
+        "Stop being group admin of {group}": "Deixar de ser administrador do grupo {group}"
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

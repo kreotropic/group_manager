@@ -258,7 +258,6 @@
         "Account enabled.": "Compte activé.",
         "Add to a group": "Ajouter à un groupe",
         "Add to a group…": "Ajouter à un groupe…",
-        "Admin only": "Administrateur seulement",
         "Administrator": "Administrateur",
         "An email address is required on this server.": "Une adresse e-mail est obligatoire sur ce serveur.",
         "Bluesky": "Bluesky",
@@ -282,18 +281,12 @@
         "Fediverse (e.g. Mastodon)": "Fédivers (par ex. Mastodon)",
         "Filter by status": "Filtrer par état",
         "Give a password, or an email address to send a link to set one.": "Indiquez un mot de passe, ou une adresse e-mail pour envoyer un lien permettant d'en définir un.",
-        "Group": "Groupe",
-        "Group admin": "Administrateur du groupe",
-        "Group admin of {group}": "Administrateur du groupe {group}",
-        "Groups of this user": "Groupes de cet utilisateur",
         "Headline": "Titre",
-        "Joining": "Rejoint",
         "Language": "Langue",
         "Last login": "Dernière connexion",
         "Leave empty to email the user a link to set their own.": "Laissez vide pour envoyer à l'utilisateur un lien lui permettant de définir le sien.",
         "Leave empty to have one generated. Cannot be changed later.": "Laissez vide pour en générer un. Ne peut pas être modifié par la suite.",
         "Leave empty to keep the current one": "Laissez vide pour conserver l'actuel",
-        "Leaving": "Quitte",
         "Local account": "Compte local",
         "Location": "Lieu",
         "Managed by the account's backend": "Géré par le backend du compte",
@@ -333,7 +326,6 @@
         "This will permanently delete the account \"{name}\" ({uid}), including all their files. This cannot be undone.": "Le compte \"{name}\" ({uid}) sera définitivement supprimé, ainsi que tous ses fichiers. Cette action est irréversible.",
         "Too many changes in a short time. Wait a few minutes and try again.": "Trop de modifications en peu de temps. Attendez quelques minutes et réessayez.",
         "Try a different search term or clear the filter.": "Essayez un autre terme de recherche ou effacez le filtre.",
-        "Undo": "Annuler",
         "Used to log in. Cannot be changed later.": "Sert à se connecter. Ne peut pas être modifié par la suite.",
         "User \"{uid}\" created.": "Utilisateur \"{uid}\" créé.",
         "User \"{uid}\" deleted.": "Utilisateur \"{uid}\" supprimé.",
@@ -371,7 +363,10 @@
         "_%n group_::_%n groups_": [
             "%n groupe",
             "%n groupes"
-        ]
+        ],
+        "Also group admin of, without being a member:": "Également administrateur de, sans en être membre :",
+        "Make group admin of {group}": "Rendre administrateur du groupe {group}",
+        "Stop being group admin of {group}": "Ne plus être administrateur du groupe {group}"
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }
