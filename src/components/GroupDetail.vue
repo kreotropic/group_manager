@@ -144,6 +144,7 @@
 				@renamed="onRenamed" />
 
 			<NcDialog :open="showDeleteDialog"
+				dialog-classes="gm-dialog"
 				:name="t('group_manager', 'Delete group?')"
 				:buttons="deleteButtons"
 				size="small"

@@ -4,6 +4,7 @@
   -->
 <template>
 	<NcDialog :open="open"
+		dialog-classes="gm-dialog"
 		:name="t('group_manager', 'Rename group')"
 		:buttons="buttons"
 		is-form

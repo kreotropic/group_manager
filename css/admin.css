@@ -48,3 +48,19 @@
 		scrollbar-width: thin;
 	}
 }
+
+/* Dialogs are teleported to <body>, outside #group-manager. In a dark
+   theme their surface is the page's own background, so over the panel
+   behind them they read as a hole rather than a raised card: lift them one
+   step. Fields inside keep the darker main background and read as inset. */
+body[data-themes*="dark"] .modal-container:has(.gm-dialog) {
+	background-color: var(--color-background-hover);
+	border: 1px solid var(--color-border);
+}
+
+@media (prefers-color-scheme: dark) {
+	body[data-themes*="default"] .modal-container:has(.gm-dialog) {
+		background-color: var(--color-background-hover);
+		border: 1px solid var(--color-border);
+	}
+}

@@ -4,6 +4,7 @@
   -->
 <template>
 	<NcDialog :open="open"
+		dialog-classes="gm-dialog"
 		:name="t('group_manager', 'Create group folder')"
 		:buttons="buttons"
 		is-form

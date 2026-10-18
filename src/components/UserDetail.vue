@@ -126,6 +126,7 @@
 			</div>
 
 			<NcDialog :open="showDeleteDialog"
+				dialog-classes="gm-dialog"
 				:name="t('group_manager', 'Delete account?')"
 				:buttons="deleteButtons"
 				size="small"
