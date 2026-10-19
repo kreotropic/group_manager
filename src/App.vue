@@ -600,16 +600,11 @@ export default {
 	background: var(--color-primary-element);
 }
 
-/* A card like the group list beside it (GroupList.vue), same radius: white
-   with a border, next to the list's grey. The border is an inset outline:
-   a real one pushed the content 1px off the list's row grid. */
+/* No card of its own: the panel sits straight on Nextcloud's content
+   area, beside the list's grey column. */
 .gm-detail {
 	flex: 1;
 	min-width: 0;
-	outline: 1px solid var(--color-border);
-	outline-offset: -1px;
-	border-radius: var(--border-radius-container-large, 14px);
-	background: var(--color-main-background);
 	display: flex;
 	overflow: hidden;
 }

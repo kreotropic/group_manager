@@ -16,7 +16,7 @@
 	height: 100%;
 	min-height: 0;
 	padding-top: var(--gf-pad-top);
-	border-radius: var(--border-radius-container-large, 14px);
+	border-radius: var(--border-radius-large);
 	background: var(--color-background-dark);
 }
 
@@ -247,7 +247,7 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 14px;
+	font-size: var(--default-font-size);
 }
 
 .gm-list__row--active .gm-list__row-name {
@@ -259,7 +259,7 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	font-family: monospace;
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }
 

@@ -5,64 +5,114 @@
 <template>
 	<div class="gm-ua">
 		<div class="gm-ua__scroll">
-			<div class="gm-ua__facts">
-				<div class="gm-ua__fact">
-					<span class="gm-ua__fact-label">{{ t('group_manager', 'User ID') }}</span>
-					<span class="gm-ua__fact-value gm-ua__mono" :title="details.id">{{ details.id }}</span>
-				</div>
-				<div class="gm-ua__fact">
-					<span class="gm-ua__fact-label">{{ t('group_manager', 'Origin') }}</span>
-					<span class="gm-ua__fact-value">{{ originText }}</span>
-				</div>
-				<div class="gm-ua__fact">
-					<span class="gm-ua__fact-label">{{ t('group_manager', 'Last login') }}</span>
-					<span class="gm-ua__fact-value">{{ lastLoginText }}</span>
-				</div>
-				<div class="gm-ua__fact">
-					<span class="gm-ua__fact-label">{{ t('group_manager', 'Storage') }}</span>
-					<span class="gm-ua__fact-value">{{ storageText }}</span>
-				</div>
-			</div>
-
 			<section class="gm-ua__section">
 				<h3 class="gm-ua__heading">{{ t('group_manager', 'Account') }}</h3>
+				<!-- One note for what the account's backend owns, instead of one
+				     under each of those fields. -->
+				<p v-if="managedNote" class="gm-ua__managed">
+					<LockOutline :size="16" />
+					{{ managedNote }}
+				</p>
 				<div class="gm-ua__grid">
 					<div class="gm-ua__field" :class="fieldClass('displayname')">
-						<label class="gm-ua__label" :for="ids.displayname">{{ t('group_manager', 'Display name') }}</label>
-						<NcTextField :id="ids.displayname"
+						<div class="gm-ua__label-row">
+							<component :is="canEdit('displayname') ? 'label' : 'span'"
+								class="gm-ua__label"
+								:for="canEdit('displayname') ? ids.displayname : undefined">
+								{{ t('group_manager', 'Display name') }}
+							</component>
+							<span v-if="isSaved('displayname')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
+						<NcTextField v-if="canEdit('displayname')"
+							:id="ids.displayname"
 							:model-value="value('displayname')"
 							:label-outside="true"
-							:disabled="!canEdit('displayname') || applying"
+							:disabled="applying"
 							@update:model-value="stage('displayname', $event)" />
-						<span v-if="!canEdit('displayname')" class="gm-ua__hint">{{ backendHint }}</span>
+						<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value('displayname') }">{{ readonlyText('displayname') }}</span>
+					</div>
+
+					<!-- Pronouns sit with the name they go with. -->
+					<div v-for="field in accountProfileFields"
+						:key="field.key"
+						class="gm-ua__field"
+						:class="fieldClass(field.key)">
+						<div class="gm-ua__label-row">
+							<component :is="canEdit(field.key) ? 'label' : 'span'"
+								class="gm-ua__label"
+								:for="canEdit(field.key) ? ids.prefix + field.key : undefined">
+								{{ field.label }}
+							</component>
+							<span v-if="isSaved(field.key)" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
+						<NcTextField v-if="canEdit(field.key)"
+							:id="ids.prefix + field.key"
+							:model-value="value(field.key)"
+							:type="field.type || 'text'"
+							:label-outside="true"
+							:disabled="applying"
+							@update:model-value="stage(field.key, $event)" />
+						<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value(field.key) }">{{ readonlyText(field.key) }}</span>
 					</div>
 
 					<div class="gm-ua__field" :class="fieldClass('email')">
-						<label class="gm-ua__label" :for="ids.email">{{ t('group_manager', 'Email') }}</label>
-						<NcTextField :id="ids.email"
+						<div class="gm-ua__label-row">
+							<component :is="canEdit('email') ? 'label' : 'span'"
+								class="gm-ua__label"
+								:for="canEdit('email') ? ids.email : undefined">
+								{{ t('group_manager', 'Email') }}
+							</component>
+							<span v-if="isSaved('email')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
+						<NcTextField v-if="canEdit('email')"
+							:id="ids.email"
 							:model-value="value('email')"
 							type="email"
 							:label-outside="true"
-							:disabled="!canEdit('email') || applying"
+							:disabled="applying"
 							@update:model-value="stage('email', $event)" />
-						<span v-if="!canEdit('email')" class="gm-ua__hint">{{ backendHint }}</span>
+						<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value('email') }">{{ readonlyText('email') }}</span>
 					</div>
 
-					<div class="gm-ua__field" :class="fieldClass('password')">
-						<label class="gm-ua__label" :for="ids.password">{{ t('group_manager', 'New password') }}</label>
-						<NcPasswordField v-if="details.backendCapabilities?.setPassword"
-							:id="ids.password"
-							:model-value="value('password')"
-							:label-outside="true"
-							:placeholder="t('group_manager', 'Leave empty to keep the current one')"
-							autocomplete="new-password"
-							:disabled="applying"
-							@update:model-value="stage('password', $event)" />
-						<span v-else class="gm-ua__readonly-value">{{ t('group_manager', 'Set in the account\'s backend') }}</span>
+					<!-- Only where the backend lets it be set (not LDAP), and only
+					     once asked for: an empty password box on every account
+					     read as something to fill in. -->
+					<div v-if="details.backendCapabilities?.setPassword" class="gm-ua__field" :class="fieldClass('password')">
+						<div class="gm-ua__label-row">
+							<!-- A label for the box once open; while closed the button
+							     carries its own name ("Change password"). -->
+							<component :is="passwordOpen ? 'label' : 'span'"
+								class="gm-ua__label"
+								:for="passwordOpen ? ids.password : undefined">
+								{{ t('group_manager', 'Password') }}
+							</component>
+							<span v-if="isSaved('password')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
+						<div v-if="passwordOpen" class="gm-ua__password">
+							<NcPasswordField ref="passwordField"
+								:id="ids.password"
+								:model-value="value('password')"
+								:label-outside="true"
+								:placeholder="t('group_manager', 'New password')"
+								autocomplete="new-password"
+								:disabled="applying"
+								@update:model-value="stage('password', $event)" />
+							<NcButton variant="tertiary" :disabled="applying" @click="closePassword">
+								{{ t('group_manager', 'Cancel') }}
+							</NcButton>
+						</div>
+						<div v-else>
+							<NcButton :disabled="applying" @click="openPassword">
+								{{ t('group_manager', 'Change password') }}
+							</NcButton>
+						</div>
 					</div>
 
 					<div class="gm-ua__field" :class="fieldClass('quota')">
-						<label class="gm-ua__label" :for="ids.quota">{{ t('group_manager', 'Personal quota') }}</label>
+						<div class="gm-ua__label-row">
+							<label class="gm-ua__label" :for="ids.quota">{{ t('group_manager', 'Personal quota') }}</label>
+							<span v-if="isSaved('quota')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
 						<NcSelect :input-id="ids.quota"
 							:model-value="quotaOption"
 							:options="quotaOptions"
@@ -73,25 +123,24 @@
 							label="label"
 							:label-outside="true"
 							@update:model-value="onQuotaPicked" />
+						<!-- Usage against a limit only: with no limit there is
+						     nothing to measure it by, and the amount used is in the
+						     header already. -->
 						<div v-if="usage" class="gm-ua__usage">
-							<div v-if="usage.percent !== null"
-								class="gm-ua__bar"
-								role="progressbar"
-								:aria-valuemin="0"
-								:aria-valuemax="100"
-								:aria-valuenow="Math.min(usage.percent, 100)"
-								:aria-label="t('group_manager', 'Storage usage')">
-								<div class="gm-ua__bar-fill"
-									:class="{ 'gm-ua__bar-fill--full': usage.percent >= 90 }"
-									:style="{ width: Math.min(usage.percent, 100) + '%' }" />
-							</div>
+							<NcProgressBar :value="Math.min(usage.percent, 100)"
+								:error="usage.percent >= 90"
+								size="small"
+								:aria-label="t('group_manager', 'Storage usage')" />
 							<span class="gm-ua__hint">{{ usage.text }}</span>
 						</div>
 						<span v-if="quotaError" class="gm-ua__hint gm-ua__hint--error">{{ quotaError }}</span>
 					</div>
 
 					<div class="gm-ua__field" :class="fieldClass('language')">
-						<label class="gm-ua__label" :for="ids.language">{{ t('group_manager', 'Language') }}</label>
+						<div class="gm-ua__label-row">
+							<label class="gm-ua__label" :for="ids.language">{{ t('group_manager', 'Language') }}</label>
+							<span v-if="isSaved('language')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
 						<NcSelect :input-id="ids.language"
 							:model-value="languageOption"
 							:options="languageOptions"
@@ -103,18 +152,44 @@
 					</div>
 
 					<div class="gm-ua__field" :class="fieldClass('manager')">
-						<label class="gm-ua__label" :for="ids.manager">{{ t('group_manager', 'Manager') }}</label>
+						<div class="gm-ua__label-row">
+							<label class="gm-ua__label" :for="ids.manager">{{ t('group_manager', 'Manager') }}</label>
+							<span v-if="isSaved('manager')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
 						<NcSelect :input-id="ids.manager"
 							:model-value="managerOption"
 							:options="managerOptions"
 							:filterable="false"
 							:loading="managerLoading"
 							:disabled="applying"
-							:placeholder="t('group_manager', 'Search for a person')"
+							:placeholder="t('group_manager', 'None')"
 							label="displayName"
 							:label-outside="true"
 							@search="searchManagers"
-							@update:model-value="onManagerPicked" />
+							@update:model-value="onManagerPicked">
+							<template #option="option">
+								<span class="gm-ua__person">
+									<NcAvatar :user="option.uid"
+										:display-name="option.displayName"
+										:size="24"
+										:hide-status="true"
+										:disable-menu="true"
+										:disable-tooltip="true" />
+									<span class="gm-ua__person-name">{{ option.displayName }}</span>
+								</span>
+							</template>
+							<template #selected-option="option">
+								<span class="gm-ua__person">
+									<NcAvatar :user="option.uid"
+										:display-name="option.displayName"
+										:size="24"
+										:hide-status="true"
+										:disable-menu="true"
+										:disable-tooltip="true" />
+									<span class="gm-ua__person-name">{{ option.displayName }}</span>
+								</span>
+							</template>
+						</NcSelect>
 					</div>
 				</div>
 			</section>
@@ -122,73 +197,102 @@
 			<section class="gm-ua__section">
 				<div class="gm-ua__heading-row">
 					<h3 class="gm-ua__heading">{{ t('group_manager', 'Profile') }}</h3>
-					<NcCheckboxRadioSwitch v-if="'profile_enabled' in details"
-						type="switch"
-						:model-value="value('profile_enabled') === '1'"
+					<span v-if="isSaved('profile_enabled')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+				</div>
+				<div v-if="'profile_enabled' in details" class="gm-ua__visibility">
+					<NcCheckboxRadioSwitch type="switch"
+						:model-value="profileEnabled"
 						:disabled="!canEdit('profile_enabled') || applying"
 						:class="fieldClass('profile_enabled')"
 						@update:model-value="stage('profile_enabled', $event ? '1' : '0')">
-						{{ t('group_manager', 'Profile enabled') }}
+						{{ t('group_manager', 'Public profile visible') }}
 					</NcCheckboxRadioSwitch>
+					<span class="gm-ua__hint">{{ t('group_manager', 'Shows these fields on the person\'s profile page. When off, they are kept and can still be edited.') }}</span>
 				</div>
-				<div class="gm-ua__grid">
-					<div v-for="field in profileFields"
-						:key="field.key"
-						class="gm-ua__field"
-						:class="fieldClass(field.key)">
-						<label class="gm-ua__label" :for="ids.prefix + field.key">{{ field.label }}</label>
-						<NcTextField :id="ids.prefix + field.key"
-							:model-value="value(field.key)"
-							:type="field.type || 'text'"
-							:label-outside="true"
-							:disabled="!canEdit(field.key) || applying"
-							@update:model-value="stage(field.key, $event)" />
-						<span v-if="!canEdit(field.key)" class="gm-ua__hint">{{ backendHint }}</span>
+
+				<!-- Faded while the profile is hidden, still editable. -->
+				<div class="gm-ua__profile" :class="{ 'gm-ua__profile--off': 'profile_enabled' in details && !profileEnabled }">
+					<div v-for="group in profileGroups" :key="group.key" class="gm-ua__subsection">
+						<h4 class="gm-ua__subheading">{{ group.label }}</h4>
+						<div class="gm-ua__grid">
+							<div v-for="field in group.fields"
+								:key="field.key"
+								class="gm-ua__field"
+								:class="fieldClass(field.key)">
+								<div class="gm-ua__label-row">
+									<component :is="canEdit(field.key) ? 'label' : 'span'"
+										class="gm-ua__label"
+										:for="canEdit(field.key) ? ids.prefix + field.key : undefined">
+										{{ field.label }}
+									</component>
+									<span v-if="isSaved(field.key)" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+								</div>
+								<NcTextField v-if="canEdit(field.key)"
+									:id="ids.prefix + field.key"
+									:model-value="value(field.key)"
+									:type="field.type || 'text'"
+									:label-outside="true"
+									:disabled="applying"
+									@update:model-value="stage(field.key, $event)" />
+								<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value(field.key) }">{{ readonlyText(field.key) }}</span>
+							</div>
+						</div>
 					</div>
-				</div>
-				<div v-if="'biography' in details" class="gm-ua__field gm-ua__bio" :class="fieldClass('biography')">
-					<label class="gm-ua__label" :for="ids.prefix + 'biography'">{{ t('group_manager', 'About') }}</label>
-					<NcTextArea :id="ids.prefix + 'biography'"
-						:model-value="value('biography')"
-						:label-outside="true"
-						:disabled="!canEdit('biography') || applying"
-						resize="vertical"
-						@update:model-value="stage('biography', $event)" />
+
+					<div v-if="'biography' in details" class="gm-ua__field gm-ua__bio" :class="fieldClass('biography')">
+						<div class="gm-ua__label-row">
+							<component :is="canEdit('biography') ? 'label' : 'span'"
+								class="gm-ua__label"
+								:for="canEdit('biography') ? ids.prefix + 'biography' : undefined">
+								{{ t('group_manager', 'About') }}
+							</component>
+							<span v-if="isSaved('biography')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						</div>
+						<NcTextArea v-if="canEdit('biography')"
+							:id="ids.prefix + 'biography'"
+							:model-value="value('biography')"
+							:label-outside="true"
+							:disabled="applying"
+							resize="vertical"
+							@update:model-value="stage('biography', $event)" />
+						<span v-else class="gm-ua__value gm-ua__value--multiline" :class="{ 'gm-ua__value--empty': !value('biography') }">{{ readonlyText('biography') }}</span>
+					</div>
 				</div>
 			</section>
 		</div>
 
-		<NcNoteCard v-if="lastResult" :type="lastResult.failures.length ? 'error' : 'success'" class="gm-ua__result">
-			<p v-if="!lastResult.failures.length">
-				{{ n('group_manager', '%n field saved.', '%n fields saved.', lastResult.saved) }}
-			</p>
-			<template v-else>
-				<p>{{ t('group_manager', 'Some fields were not saved and are still staged:') }}</p>
-				<ul class="gm-ua__failures">
-					<li v-for="failure in lastResult.failures" :key="failure.key">
-						<strong>{{ failure.label }}</strong>: {{ failure.message }}
-					</li>
-				</ul>
-			</template>
+		<!-- Successes show by each saved field; only failures need a list. -->
+		<NcNoteCard v-if="lastResult?.failures.length" type="error" class="gm-ua__result">
+			<p>{{ t('group_manager', 'Some fields were not saved and are still staged:') }}</p>
+			<ul class="gm-ua__failures">
+				<li v-for="failure in lastResult.failures" :key="failure.key">
+					<strong>{{ failure.label }}</strong>: {{ failure.message }}
+				</li>
+			</ul>
 		</NcNoteCard>
 	</div>
 </template>
 
 <script>
-import { translate as t, translatePlural as n, getLanguage } from '@nextcloud/l10n'
+import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
+import NcProgressBar from '@nextcloud/vue/components/NcProgressBar'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import Check from 'vue-material-design-icons/Check.vue'
+import LockOutline from 'vue-material-design-icons/LockOutline.vue'
 import { editUserField, fetchUserSummary, fetchUsers } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
 import { humanSize } from '../utils/format.js'
 import { isValidQuota, quotaChoices, quotaLabel } from '../utils/quota.js'
 
-// What core reports as "no limit" (FileInfo::SPACE_UNLIMITED).
-const UNLIMITED = -3
+// How long "Saved" stays by a field after Apply.
+const SAVED_MS = 6000
 
 let instanceCount = 0
 
@@ -196,12 +300,17 @@ export default {
 	name: 'UserAccountForm',
 
 	components: {
+		NcAvatar,
+		NcButton,
 		NcCheckboxRadioSwitch,
 		NcNoteCard,
 		NcPasswordField,
+		NcProgressBar,
 		NcSelect,
 		NcTextArea,
 		NcTextField,
+		Check,
+		LockOutline,
 	},
 
 	props: {
@@ -235,6 +344,10 @@ export default {
 			draft: {},
 			applying: false,
 			lastResult: null,
+			// The password box shows only once asked for.
+			passwordOpen: false,
+			// Fields saved by the last Apply, marked "Saved" for a moment.
+			savedKeys: [],
 			quotaError: '',
 			managerOptions: [],
 			managerLoading: false,
@@ -276,8 +389,49 @@ export default {
 			return Object.keys(this.draft)
 		},
 
-		backendHint() {
-			return t('group_manager', 'Managed by the account\'s backend')
+		/**
+		 * One note for the account fields the backend owns: the usual LDAP
+		 * case (name, email and password all owned) spelled out, any other
+		 * mix said generally, the fields themselves showing as plain text.
+		 */
+		managedNote() {
+			const owned = [
+				!this.canEdit('displayname'),
+				!this.canEdit('email'),
+				!this.details.backendCapabilities?.setPassword,
+			]
+			if (!owned.some(Boolean)) {
+				return ''
+			}
+			const ldap = this.summary.backend === 'ldap'
+			if (owned.every(Boolean)) {
+				return ldap
+					? t('group_manager', 'Name, email and password are managed by LDAP.')
+					: t('group_manager', 'Name, email and password are managed by the account\'s backend.')
+			}
+			return ldap
+				? t('group_manager', 'Some account fields are managed by LDAP.')
+				: t('group_manager', 'Some account fields are managed by the account\'s backend.')
+		},
+
+		profileEnabled() {
+			return this.value('profile_enabled') === '1'
+		},
+
+		/** Profile properties shown in the Account section (pronouns). */
+		accountProfileFields() {
+			return this.profileFields.filter((field) => field.section === 'account')
+		},
+
+		/** The rest of the profile, in small titled groups, empty ones left out. */
+		profileGroups() {
+			return [
+				{ key: 'contact', label: t('group_manager', 'Contact') },
+				{ key: 'work', label: t('group_manager', 'Work') },
+				{ key: 'social', label: t('group_manager', 'Social') },
+			]
+				.map((group) => ({ ...group, fields: this.profileFields.filter((field) => field.section === group.key) }))
+				.filter((group) => group.fields.length > 0)
 		},
 
 		hasPendingChanges() {
@@ -291,61 +445,30 @@ export default {
 		 */
 		profileFields() {
 			const all = [
-				{ key: 'phone', label: t('group_manager', 'Phone number'), type: 'tel' },
-				{ key: 'address', label: t('group_manager', 'Location') },
-				{ key: 'website', label: t('group_manager', 'Website'), type: 'url' },
-				{ key: 'organisation', label: t('group_manager', 'Organisation') },
-				{ key: 'role', label: t('group_manager', 'Role') },
-				{ key: 'headline', label: t('group_manager', 'Headline') },
-				{ key: 'pronouns', label: t('group_manager', 'Pronouns') },
-				{ key: 'fediverse', label: t('group_manager', 'Fediverse (e.g. Mastodon)') },
-				{ key: 'bluesky', label: t('group_manager', 'Bluesky') },
-				{ key: 'twitter', label: t('group_manager', 'X (formerly Twitter)') },
+				{ key: 'pronouns', label: t('group_manager', 'Pronouns'), section: 'account' },
+				{ key: 'phone', label: t('group_manager', 'Phone number'), type: 'tel', section: 'contact' },
+				{ key: 'address', label: t('group_manager', 'Location'), section: 'contact' },
+				{ key: 'website', label: t('group_manager', 'Website'), type: 'url', section: 'contact' },
+				{ key: 'organisation', label: t('group_manager', 'Organisation'), section: 'work' },
+				{ key: 'role', label: t('group_manager', 'Role'), section: 'work' },
+				{ key: 'headline', label: t('group_manager', 'Headline'), section: 'work' },
+				{ key: 'fediverse', label: t('group_manager', 'Fediverse (e.g. Mastodon)'), section: 'social' },
+				{ key: 'bluesky', label: t('group_manager', 'Bluesky'), section: 'social' },
+				{ key: 'twitter', label: t('group_manager', 'X (formerly Twitter)'), section: 'social' },
 			]
 			return all.filter((field) => field.key in this.details)
 		},
 
-		originText() {
-			switch (this.summary.backend) {
-			case 'local':
-				return t('group_manager', 'Local account')
-			case 'ldap':
-				return t('group_manager', 'LDAP')
-			default:
-				return this.summary.backendName || this.details.backend
-			}
-		},
-
-		lastLoginText() {
-			const ts = this.details.lastLoginTimestamp
-			if (!ts) {
-				return t('group_manager', 'Never')
-			}
-			return new Intl.DateTimeFormat(getLanguage(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(ts * 1000))
-		},
-
+		/** Usage against a limit; null without one (the header has the amount). */
 		usage() {
 			const q = this.details.quota
-			if (!q || typeof q.used !== 'number') {
+			if (!q || typeof q.used !== 'number' || !(typeof q.quota === 'number' && q.quota > 0)) {
 				return null
 			}
-			const limited = typeof q.quota === 'number' && q.quota > 0
 			return {
-				percent: limited ? (q.used / q.quota) * 100 : null,
-				text: limited
-					? t('group_manager', '{used} of {total} used', { used: humanSize(q.used), total: humanSize(q.quota) })
-					: t('group_manager', '{used} used', { used: humanSize(q.used) }),
+				percent: (q.used / q.quota) * 100,
+				text: t('group_manager', '{used} of {total} used', { used: humanSize(q.used), total: humanSize(q.quota) }),
 			}
-		},
-
-		storageText() {
-			const q = this.details.quota
-			if (!q || typeof q.used !== 'number') {
-				return '—'
-			}
-			return q.quota === UNLIMITED || !(q.quota > 0)
-				? humanSize(q.used)
-				: t('group_manager', '{used} of {total}', { used: humanSize(q.used), total: humanSize(q.quota) })
 		},
 
 		quotaOptions() {
@@ -407,12 +530,21 @@ export default {
 		},
 	},
 
+	beforeUnmount() {
+		clearTimeout(this.savedTimer)
+	},
+
 	methods: {
 		t,
 		n,
 
 		value(key) {
 			return key in this.draft ? this.draft[key] : (this.original[key] ?? '')
+		},
+
+		/** A field the account's backend owns, shown as text. */
+		readonlyText(key) {
+			return this.value(key) || t('group_manager', 'Not set')
 		},
 
 		canEdit(key) {
@@ -426,6 +558,20 @@ export default {
 			default:
 				return this.profileFields.some((f) => f.key === key) ? this.editable.includes(key) : true
 			}
+		},
+
+		isSaved(key) {
+			return this.savedKeys.includes(key)
+		},
+
+		openPassword() {
+			this.passwordOpen = true
+			this.$nextTick(() => this.$refs.passwordField?.focus?.())
+		},
+
+		closePassword() {
+			this.passwordOpen = false
+			this.stage('password', '')
 		},
 
 		fieldClass(key) {
@@ -442,6 +588,7 @@ export default {
 			}
 			this.draft = draft
 			this.lastResult = null
+			this.savedKeys = this.savedKeys.filter((k) => k !== key)
 		},
 
 		createQuotaOption(text) {
@@ -502,6 +649,7 @@ export default {
 			this.draft = {}
 			this.quotaError = ''
 			this.lastResult = null
+			this.passwordOpen = false
 		},
 
 		labelFor(key) {
@@ -512,7 +660,7 @@ export default {
 				quota: t('group_manager', 'Personal quota'),
 				language: t('group_manager', 'Language'),
 				manager: t('group_manager', 'Manager'),
-				profile_enabled: t('group_manager', 'Profile enabled'),
+				profile_enabled: t('group_manager', 'Public profile visible'),
 				biography: t('group_manager', 'About'),
 			}
 			return labels[key] ?? this.profileFields.find((f) => f.key === key)?.label ?? key
@@ -531,15 +679,16 @@ export default {
 			}
 			this.applying = true
 			const failures = []
-			let saved = 0
+			const savedKeys = []
 			try {
 				for (const key of keys) {
 					try {
 						await editUserField(this.details.id, key, this.draft[key])
-						saved++
+						savedKeys.push(key)
 						if (key === 'password') {
 							const { password, ...rest } = this.draft
 							this.draft = rest
+							this.passwordOpen = false
 						}
 					} catch (err) {
 						failures.push({
@@ -554,9 +703,18 @@ export default {
 			} finally {
 				this.applying = false
 			}
-			this.lastResult = { saved, failures }
-			if (saved > 0) {
+			this.lastResult = { saved: savedKeys.length, failures }
+			this.showSaved(savedKeys)
+			if (savedKeys.length > 0) {
 				this.$emit('changed')
+			}
+		},
+
+		showSaved(keys) {
+			clearTimeout(this.savedTimer)
+			this.savedKeys = keys
+			if (keys.length > 0) {
+				this.savedTimer = setTimeout(() => { this.savedKeys = [] }, SAVED_MS)
 			}
 		},
 	},
@@ -577,40 +735,6 @@ export default {
 	overflow-y: auto;
 	padding: 4px var(--gm-scrollbar-w) 16px 0;
 	margin-right: calc(-1 * var(--gm-scrollbar-w));
-}
-
-.gm-ua__facts {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-	gap: 12px 24px;
-	margin: 0 0 24px;
-	padding: 14px 16px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-element, 8px);
-	background: var(--color-background-hover);
-}
-
-.gm-ua__fact {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-}
-
-.gm-ua__fact-label {
-	font-size: 12px;
-	color: var(--color-text-maxcontrast);
-}
-
-.gm-ua__fact-value {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.gm-ua__mono {
-	font-family: monospace;
-	font-size: 13px;
 }
 
 .gm-ua__section + .gm-ua__section {
@@ -669,16 +793,105 @@ export default {
 }
 
 .gm-ua__label {
+	font-size: 14px;
+	color: var(--color-text-maxcontrast);
+}
+
+.gm-ua__label-row {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+/* "Saved" by a field for a moment after Apply. */
+.gm-ua__saved {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	font-size: 13px;
+	color: var(--color-success-text);
+}
+
+/* The one note for the fields the account's backend owns. */
+.gm-ua__managed {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: -4px 0 14px;
 	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }
 
-.gm-ua__readonly-value {
+.gm-ua__password {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gm-ua__password :deep(.input-field) {
+	flex: 1;
+	min-width: 0;
+}
+
+/* The manager: avatar and name, in the list and once picked. */
+.gm-ua__person {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gm-ua__person-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gm-ua__visibility {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-bottom: 16px;
+}
+
+/* A hidden profile: its fields faded, still editable. */
+.gm-ua__profile--off .gm-ua__subsection,
+.gm-ua__profile--off .gm-ua__bio {
+	opacity: .5;
+}
+
+.gm-ua__subsection + .gm-ua__subsection,
+.gm-ua__subsection + .gm-ua__bio {
+	margin-top: 20px;
+}
+
+.gm-ua__subheading {
+	margin: 0 0 10px;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--color-main-text);
+}
+
+/* A field the account's backend owns: its value as plain text, as tall as
+   an input so the grid's rows stay level, with the note under it. */
+.gm-ua__value {
 	min-height: 36px;
 	display: flex;
 	align-items: center;
+	overflow-wrap: anywhere;
+	color: var(--color-main-text);
+	font-size: var(--default-font-size);
+}
+
+.gm-ua__value--multiline {
+	align-items: flex-start;
+	padding-top: 8px;
+	white-space: pre-wrap;
+}
+
+.gm-ua__value--empty {
 	color: var(--color-text-maxcontrast);
-	font-style: italic;
 }
 
 .gm-ua__usage {
@@ -688,24 +901,8 @@ export default {
 	margin-top: 4px;
 }
 
-.gm-ua__bar {
-	height: 6px;
-	border-radius: 3px;
-	background: var(--color-background-darker);
-	overflow: hidden;
-}
-
-.gm-ua__bar-fill {
-	height: 100%;
-	background: var(--color-primary-element);
-}
-
-.gm-ua__bar-fill--full {
-	background: var(--color-element-error, var(--color-error));
-}
-
 .gm-ua__hint {
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }
 

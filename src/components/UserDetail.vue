@@ -159,7 +159,7 @@
 </template>
 
 <script>
-import { translate as t, translatePlural as n } from '@nextcloud/l10n'
+import { getLanguage, translate as t, translatePlural as n } from '@nextcloud/l10n'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { confirmPassword } from '@nextcloud/password-confirmation'
 import '@nextcloud/password-confirmation/style.css'
@@ -186,6 +186,7 @@ import {
 	setUserEnabled,
 } from '../services/api.js'
 import { extractErrorMessage } from '../utils/errors.js'
+import { humanSize } from '../utils/format.js'
 
 const EMPTY_PENDING = { hasPendingChanges: false, count: 0 }
 
@@ -268,6 +269,17 @@ export default {
 			parts.push(this.groupCount
 				? n('group_manager', '%n group', '%n groups', this.groupCount)
 				: t('group_manager', 'no groups'))
+			// Last login and storage used live here, not in a summary box
+			// over the form: the header is read first anyway.
+			const ts = this.details.lastLoginTimestamp
+			parts.push(ts
+				? t('group_manager', 'last login {date}', {
+					date: new Intl.DateTimeFormat(getLanguage().replace('_', '-'), { dateStyle: 'medium' }).format(new Date(ts * 1000)),
+				})
+				: t('group_manager', 'never logged in'))
+			if (typeof this.details.quota?.used === 'number') {
+				parts.push(t('group_manager', '{used} used', { used: humanSize(this.details.quota.used) }))
+			}
 			return parts.join(' · ')
 		},
 

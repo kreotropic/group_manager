@@ -32,35 +32,10 @@
 	--gf-row-section: 28px;
 }
 
-/* Scrollbars inside the app. scrollbar-width can't be used for Chrome:
-   where it is set, Chrome ignores every ::-webkit-scrollbar rule and draws
-   its native bar, arrows included on Windows (seen with "thin" too). So
-   WebKit/Blink keep Nextcloud's own styling with the arrow buttons hidden,
-   and only engines without ::-webkit-scrollbar (Firefox) get the thin bar. */
-#group-manager ::-webkit-scrollbar-button {
-	display: none;
-	width: 0;
-	height: 0;
-}
-
-@supports not selector(::-webkit-scrollbar) {
-	#group-manager * {
-		scrollbar-width: thin;
-	}
-}
-
-/* Dialogs are teleported to <body>, outside #group-manager. In a dark
-   theme their surface is the page's own background, so over the panel
-   behind them they read as a hole rather than a raised card: lift them one
-   step. Fields inside keep the darker main background and read as inset. */
-body[data-themes*="dark"] .modal-container:has(.gm-dialog) {
-	background-color: var(--color-background-hover);
-	border: 1px solid var(--color-border);
-}
-
-@media (prefers-color-scheme: dark) {
-	body[data-themes*="default"] .modal-container:has(.gm-dialog) {
-		background-color: var(--color-background-hover);
-		border: 1px solid var(--color-border);
-	}
+/* Thin scrollbars inside the app, in the border colour on a clear track.
+   Note: where scrollbar-width is set, Chrome replaces Nextcloud's own
+   ::-webkit-scrollbar styling with its native bar. */
+#group-manager * {
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-border-dark) transparent;
 }

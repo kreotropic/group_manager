@@ -59,7 +59,14 @@
 								@mousedown.prevent
 								@click="pickOption(option)">
 								<AccountGroup v-if="option.kind === 'group'" :size="18" class="gm-mm__add-option-icon" />
-								<AccountOutline v-else :size="18" class="gm-mm__add-option-icon" />
+								<NcAvatar v-else
+									:user="option.uid"
+									:display-name="option.displayName"
+									:size="24"
+									:hide-status="true"
+									:disable-menu="true"
+									:disable-tooltip="true"
+									class="gm-mm__add-option-avatar" />
 								<span class="gm-mm__add-option-name">{{ option.displayName }}</span>
 								<span v-if="option.kind === 'group' && option.memberCount !== null" class="gm-mm__add-option-count">{{ option.memberCount }}</span>
 								<input v-else
@@ -198,7 +205,8 @@
 								:hide-status="true"
 								:disable-menu="true"
 								:disable-tooltip="true"
-								class="gm-mm__row-avatar" />
+								class="gm-mm__row-avatar"
+								:class="{ 'gm-mm__row-avatar--disabled': !member.enabled }" />
 							<span class="gm-mm__row-text">
 								<span class="gm-mm__row-name" :title="memberNameTitle(member)">{{ member.displayName }}</span>
 								<span v-if="memberDetailLine(member)" class="gm-mm__row-uid">{{ memberDetailLine(member) }}</span>
@@ -1376,7 +1384,7 @@ export default {
 	box-shadow: none !important;
 	background: transparent;
 	font-family: inherit;
-	font-size: 14px;
+	font-size: var(--default-font-size);
 	color: var(--color-main-text);
 }
 
@@ -1424,6 +1432,10 @@ export default {
 	background: var(--color-background-hover);
 }
 
+.gm-mm__add-option-avatar {
+	flex-shrink: 0;
+}
+
 .gm-mm__add-option-icon {
 	flex-shrink: 0;
 	color: var(--color-text-maxcontrast);
@@ -1435,7 +1447,7 @@ export default {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 14px;
+	font-size: var(--default-font-size);
 }
 
 .gm-mm__add-option-count {
@@ -1456,7 +1468,7 @@ export default {
 .gm-mm__add-hint {
 	padding: 6px 10px 6px;
 	color: var(--color-text-maxcontrast);
-	font-size: 12px;
+	font-size: 13px;
 	font-style: italic;
 }
 
@@ -1723,6 +1735,11 @@ export default {
 	flex-shrink: 0;
 }
 
+/* A disabled account, as in the users list: the avatar faded. */
+.gm-mm__row-avatar--disabled {
+	opacity: .5;
+}
+
 /* Name on top, email (and username, when it adds something) under it. */
 .gm-mm__row-text {
 	flex: 1;
@@ -1740,7 +1757,7 @@ export default {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }
 
@@ -1749,7 +1766,7 @@ export default {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 14px;
+	font-size: var(--default-font-size);
 	font-weight: 500;
 }
 

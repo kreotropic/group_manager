@@ -642,13 +642,13 @@ export default {
 }
 
 .gm-ug__row-name {
-	font-size: 14px;
+	font-size: var(--default-font-size);
 	font-weight: 500;
 }
 
 .gm-ug__row-id {
 	font-family: monospace;
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 }
 

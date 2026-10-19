@@ -93,11 +93,12 @@
 					@click="$emit('select', user.uid)">
 					<NcAvatar :user="user.uid"
 						:display-name="user.displayName"
-						:size="28"
+						:size="32"
 						:hide-status="true"
 						:disable-menu="true"
 						:disable-tooltip="true"
-						class="gm-list__row-avatar" />
+						class="gm-list__row-avatar"
+						:class="{ 'gm-list__row-avatar--disabled': !user.enabled }" />
 					<span class="gm-list__row-main">
 						<span class="gm-list__row-name">{{ user.displayName }}</span>
 						<span v-if="secondLine(user)" class="gm-list__row-gid">{{ secondLine(user) }}</span>
@@ -345,6 +346,11 @@ export default {
 <style scoped>
 .gm-list__row-avatar {
 	flex-shrink: 0;
+}
+
+/* A disabled account: the avatar faded, initials and colour unchanged. */
+.gm-list__row-avatar--disabled {
+	opacity: .5;
 }
 
 .gm-list__row--disabled .gm-list__row-name {

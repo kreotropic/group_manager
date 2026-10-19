@@ -123,60 +123,61 @@
 	flex-shrink: 0;
 }
 
-/* The same pill control as the group list's origin filter (GroupList.vue):
-   a darker track, the active tab lifted out of it on the main background.
-   The row keeps the list's switch height so the two stay level. */
+/* Underlined tabs: the separator is the row's bottom edge, each tab is
+   the row's full height and the active one's 3px underline overlaps that
+   edge. The row keeps the list's switch height so the two stay level. */
 .gm-detail__tabs {
 	display: flex;
-	align-items: center;
+	align-items: stretch;
+	box-sizing: border-box;
 	height: var(--gf-row-switch);
+	border-bottom: 1px solid var(--color-border);
 }
 
 .gm-detail__tabs-track {
 	display: flex;
-	gap: 2px;
+	align-items: stretch;
+	gap: 22px;
 	min-width: 0;
-	padding: 3px;
-	border-radius: var(--border-radius-pill);
-	background: var(--color-background-darker);
 }
 
 .gm-detail__tabs .gm-detail__tab {
-	margin: 0;
+	margin: 0 0 -1px;
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	min-height: 0;
-	padding: 3px 16px;
+	height: auto;
+	padding: 3px 2px 0;
 	white-space: nowrap;
 	border: none;
-	border-radius: var(--border-radius-pill);
+	border-bottom: 3px solid transparent;
+	border-radius: 0;
 	background: transparent;
-	color: var(--color-main-text);
+	color: var(--color-text-maxcontrast);
 	font-family: inherit;
-	font-size: 13px;
-	font-weight: 500;
+	font-size: var(--default-font-size);
+	font-weight: 600;
 	cursor: pointer;
 }
 
-.gm-detail__tabs .gm-detail__tab:hover {
-	background: color-mix(in srgb, var(--color-main-background) 50%, transparent);
+/* Nextcloud's global button rules paint the border on :hover and :focus,
+   which drew a black underline under an inactive tab. */
+.gm-detail__tabs .gm-detail__tab:not(.gm-detail__tab--active):hover,
+.gm-detail__tabs .gm-detail__tab:not(.gm-detail__tab--active):focus {
+	border-bottom-color: transparent;
+	color: var(--color-main-text);
 }
 
 .gm-detail__tabs .gm-detail__tab--active,
 .gm-detail__tabs .gm-detail__tab--active:hover {
-	background: var(--color-main-background);
+	border-bottom-color: var(--color-primary-element);
 	color: var(--gm-primary-text);
-	font-weight: 600;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
 }
 
-/* The ring is for keyboard navigation only; a click leaves just the pill. */
+/* The ring is for keyboard navigation only. */
 .gm-detail__tabs .gm-detail__tab:focus:not(:focus-visible) {
 	outline: none;
-}
-
-.gm-detail__tabs .gm-detail__tab:not(.gm-detail__tab--active):focus:not(:focus-visible) {
 	box-shadow: none;
 }
 
@@ -186,6 +187,7 @@
 	outline: 2px solid var(--color-primary-element) !important;
 	outline-offset: -2px;
 	box-shadow: none !important;
+	border-radius: var(--border-radius-small, 4px);
 }
 
 .gm-detail__tab-label {

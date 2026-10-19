@@ -316,7 +316,7 @@ export default {
 }
 
 .gm-create-user__label {
-	font-size: 13px;
+	font-size: 14px;
 	color: var(--color-text-maxcontrast);
 }
 </style>
