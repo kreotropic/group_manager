@@ -54,7 +54,7 @@
 						class="gm-detail__menu"
 						:force-menu="true"
 						:aria-label="t('group_manager', 'Group actions')">
-						<NcActionButton @click="showDeleteDialog = true">
+						<NcActionButton close-after-click @click="showDeleteDialog = true">
 							<template #icon>
 								<TrashCanOutline :size="20" />
 							</template>

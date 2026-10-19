@@ -13,9 +13,11 @@ use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IUser;
+use OCP\IUserBackend;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\L10N\IFactory;
+use OCP\UserInterface;
 
 /**
  * The read side of the Users view: a light account list and the settings
@@ -35,6 +37,9 @@ class UserService {
     private const MAX_PAGE_SIZE = 200;
     private const DEFAULT_PAGE_SIZE = 50;
 
+    /** The list filters that mean "only this backend's accounts". */
+    private const ORIGIN_BACKENDS = ['local' => 'Database', 'ldap' => 'LDAP'];
+
     public function __construct(
         private IUserManager $userManager,
         private IGroupManager $groupManager,
@@ -46,7 +51,7 @@ class UserService {
     }
 
     /**
-     * @param string $filter 'all' or 'disabled'
+     * @param string $filter 'all', 'disabled', 'local' or 'ldap'
      * @return array{users: list<array<string, mixed>>, hasMore: bool}
      */
     public function listUsers(string $search, ?int $pageSize, int $offset, string $filter): array {
@@ -54,16 +59,18 @@ class UserService {
         if ($pageSize < self::MIN_PAGE_SIZE || $pageSize > self::MAX_PAGE_SIZE || $offset < 0) {
             throw new GroupServiceException($this->l->t('Invalid pagination parameters'), 'INVALID_PAGINATION', 400);
         }
-        if (!in_array($filter, ['all', 'disabled'], true)) {
+        if (!in_array($filter, ['all', 'disabled', 'local', 'ldap'], true)) {
             throw new GroupServiceException($this->l->t('Unknown filter'), 'INVALID_FILTER', 400);
         }
 
         // One extra row tells whether another page exists without a count,
         // which some backends (LDAP) can't give cheaply.
         $search = trim($search);
-        $users = $filter === 'disabled'
-            ? $this->userManager->getDisabledUsers($pageSize + 1, $offset, $search)
-            : $this->userManager->search($search, $pageSize + 1, $offset);
+        $users = match ($filter) {
+            'disabled' => $this->userManager->getDisabledUsers($pageSize + 1, $offset, $search),
+            'local', 'ldap' => $this->searchBackend(self::ORIGIN_BACKENDS[$filter], $search, $pageSize + 1, $offset),
+            default => $this->userManager->search($search, $pageSize + 1, $offset),
+        };
 
         $hasMore = count($users) > $pageSize;
         $users = array_slice(array_values($users), 0, $pageSize);
@@ -104,6 +111,8 @@ class UserService {
 
         return [
             'currentUser' => $this->userSession->getUser()?->getUID(),
+            // Whether the list offers the Local / LDAP filters.
+            'hasLdap' => $this->findBackend(self::ORIGIN_BACKENDS['ldap']) !== null,
             'languages' => array_values(array_merge(
                 $languages['commonLanguages'] ?? [],
                 $languages['otherLanguages'] ?? [],
@@ -114,6 +123,37 @@ class UserService {
             'requireEmail' => $this->config->getAppValue('core', 'newUser.requireEmail', 'no') === 'yes',
             'generateUserId' => $this->config->getAppValue('core', 'newUser.generateUserID', 'no') === 'yes',
         ];
+    }
+
+    /**
+     * One origin's accounts, asked of that backend itself so the paging stays
+     * right: filtering a mixed page afterwards could leave it nearly empty.
+     * No such backend (LDAP not configured) means no accounts.
+     *
+     * @return list<IUser>
+     */
+    private function searchBackend(string $backendName, string $search, int $limit, int $offset): array {
+        $backend = $this->findBackend($backendName);
+        if ($backend === null) {
+            return [];
+        }
+        $users = [];
+        foreach ($backend->getUsers($search, $limit, $offset) as $uid) {
+            $user = $this->userManager->get((string)$uid);
+            if ($user !== null) {
+                $users[] = $user;
+            }
+        }
+        return $users;
+    }
+
+    private function findBackend(string $name): ?UserInterface {
+        foreach ($this->userManager->getBackends() as $backend) {
+            if ($backend instanceof IUserBackend && $backend->getBackendName() === $name) {
+                return $backend;
+            }
+        }
+        return null;
     }
 
     /**

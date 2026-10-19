@@ -28,7 +28,7 @@
 			</div>
 
 			<div class="gm-list__switch">
-				<div class="gm-list__filters" role="group" :aria-label="t('group_manager', 'Filter by status')">
+				<div class="gm-list__filters" role="group" :aria-label="t('group_manager', 'Filter users')">
 					<button v-for="opt in filterOptions"
 						:key="opt.value"
 						type="button"
@@ -174,6 +174,12 @@ export default {
 			type: Boolean,
 			default: false,
 		},
+		// Local and LDAP are only offered when there is an LDAP backend, as
+		// in the group list.
+		hasLdap: {
+			type: Boolean,
+			default: false,
+		},
 	},
 
 	emits: ['select', 'create', 'toggle-quick-access', 'switch-mode'],
@@ -186,14 +192,40 @@ export default {
 			hasMore: true,
 			searchQuery: '',
 			filter: 'all',
-			filterOptions: [
-				{ value: 'all', label: t('group_manager', 'All') },
-				{ value: 'disabled', label: t('group_manager', 'Disabled') },
-			],
 			// Bumped on every reset, so a page that arrives after the search
 			// or filter changed is dropped instead of mixed into the new list.
 			generation: 0,
 		}
+	},
+
+	computed: {
+		/**
+		 * One control for origin and status: they are filtered server-side
+		 * from different sources (one backend's own listing, the disabled
+		 * accounts query), so they don't combine.
+		 */
+		filterOptions() {
+			return [
+				{ value: 'all', label: t('group_manager', 'All') },
+				...(this.hasLdap
+					? [
+						{ value: 'local', label: t('group_manager', 'Local') },
+						{ value: 'ldap', label: t('group_manager', 'LDAP') },
+					]
+					: []),
+				{ value: 'disabled', label: t('group_manager', 'Disabled') },
+			]
+		},
+	},
+
+	watch: {
+		// The options arrive after mount; an origin filter left on when LDAP
+		// turns out to be gone would list nothing with no way to clear it.
+		hasLdap(now) {
+			if (!now && (this.filter === 'local' || this.filter === 'ldap')) {
+				this.setFilter('all')
+			}
+		},
 	},
 
 	mounted() {

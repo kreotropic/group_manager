@@ -27,6 +27,7 @@
 				v-show="mode === 'users'"
 				ref="userList"
 				:selected-uid="selectedUid"
+				:has-ldap="!!userOptions?.hasLdap"
 				:quick-access="quickAccess"
 				@toggle-quick-access="toggleQuickAccess"
 				@select="selectUser"

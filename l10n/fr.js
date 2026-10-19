@@ -253,7 +253,6 @@ OC.L10N.register(
     "Email (optional)" : "E-mail (facultatif)",
     "Enable account" : "Activer le compte",
     "Fediverse (e.g. Mastodon)" : "Fédivers (par ex. Mastodon)",
-    "Filter by status" : "Filtrer par état",
     "Give a password, or an email address to send a link to set one." : "Indiquez un mot de passe, ou une adresse e-mail pour envoyer un lien permettant d'en définir un.",
     "Headline" : "Titre",
     "Language" : "Langue",
@@ -325,6 +324,8 @@ OC.L10N.register(
     "_%n group_::_%n groups_" : ["%n groupe", "%n groupes"],
     "Also group admin of, without being a member:" : "Également administrateur de, sans en être membre :",
     "Make group admin of {group}" : "Rendre administrateur du groupe {group}",
-    "Stop being group admin of {group}" : "Ne plus être administrateur du groupe {group}"
+    "Stop being group admin of {group}" : "Ne plus être administrateur du groupe {group}",
+    "Filter users" : "Filtrer les utilisateurs",
+    "This is an administrator account." : "Ceci est un compte administrateur."
 },
 "nplurals=2; plural=(n != 1);");

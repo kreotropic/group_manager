@@ -40,6 +40,7 @@
 						:force-menu="true"
 						:aria-label="t('group_manager', 'Account actions')">
 						<NcActionButton v-if="details.enabled"
+							close-after-click
 							:disabled="isSelf || busy"
 							:title="isSelf ? t('group_manager', 'You can\'t disable your own account') : ''"
 							@click="toggleEnabled(false)">
@@ -48,20 +49,28 @@
 							</template>
 							{{ t('group_manager', 'Disable account') }}
 						</NcActionButton>
-						<NcActionButton v-else :disabled="busy" @click="toggleEnabled(true)">
+						<NcActionButton v-else
+							close-after-click
+							:disabled="busy"
+							@click="toggleEnabled(true)">
 							<template #icon>
 								<AccountCheckOutline :size="20" />
 							</template>
 							{{ t('group_manager', 'Enable account') }}
 						</NcActionButton>
-						<NcActionButton v-if="details.email" :disabled="busy" @click="resendWelcome">
+						<NcActionButton v-if="details.email"
+							close-after-click
+							:disabled="busy"
+							@click="resendWelcome">
 							<template #icon>
 								<EmailOutline :size="20" />
 							</template>
 							{{ t('group_manager', 'Resend welcome email') }}
 						</NcActionButton>
 						<NcActionSeparator />
-						<NcActionButton :disabled="isSelf || busy" @click="showDeleteDialog = true">
+						<NcActionButton close-after-click
+							:disabled="isSelf || busy"
+							@click="showDeleteDialog = true">
 							<template #icon>
 								<TrashCanOutline :size="20" />
 							</template>
@@ -134,6 +143,11 @@
 				<div class="gm-delete-dialog">
 					<NcNoteCard type="warning">
 						{{ t('group_manager', 'This will permanently delete the account "{name}" ({uid}), including all their files. This cannot be undone.', { name: details.displayname || details.id, uid: details.id }) }}
+					</NcNoteCard>
+					<!-- Disabling an administrator already asks first; deleting one
+					     says so here, before the same confirmation. -->
+					<NcNoteCard v-if="summary.isAdmin" type="error">
+						{{ t('group_manager', 'This is an administrator account.') }}
 					</NcNoteCard>
 					<NcNoteCard v-if="deleteError" type="error">
 						{{ deleteError }}

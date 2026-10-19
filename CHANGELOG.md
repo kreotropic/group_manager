@@ -12,8 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - **Users view.** A Groups | Users switch at the top of the left column
-  lists every account (searchable, All / Disabled filter, loaded as you
-  scroll). The panel on the right edits the selected one in two tabs:
+  lists every account (searchable, loaded as you scroll), filtered by
+  All / Local / LDAP / Disabled; Local and LDAP are offered when an LDAP
+  backend is configured, and each is listed from that backend itself. The
+  panel on the right edits the selected one in two tabs:
   **Account & profile** (display name, email, password, personal quota with
   usage, language, manager, and the profile fields) and **Groups** (add to
   or remove from groups, make group admin), staged and applied with the same

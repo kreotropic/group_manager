@@ -14,9 +14,11 @@ use OCP\IConfig;
 use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IUser;
+use OCP\IUserBackend;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\L10N\IFactory;
+use OCP\UserInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -57,6 +59,12 @@ class UserServiceTest extends TestCase {
         $user->method('getBackendClassName')->willReturn($backend);
         $user->method('getLastLogin')->willReturn(0);
         return $user;
+    }
+
+    private function backend(string $name): UserInterface&IUserBackend&MockObject {
+        $backend = $this->createMockForIntersectionOfInterfaces([UserInterface::class, IUserBackend::class]);
+        $backend->method('getBackendName')->willReturn($name);
+        return $backend;
     }
 
     public function testListAsksForOneExtraRowToTellWhetherMoreExist(): void {
@@ -178,6 +186,7 @@ class UserServiceTest extends TestCase {
         ]);
         $admin = $this->user('admin');
         $this->userSession->method('getUser')->willReturn($admin);
+        $this->userManager->method('getBackends')->willReturn([]);
 
         $options = $this->service->getOptions();
 
@@ -187,5 +196,57 @@ class UserServiceTest extends TestCase {
         $this->assertTrue($options['requireEmail']);
         $this->assertSame(['en', 'pt_PT'], array_column($options['languages'], 'code'));
         $this->assertSame('admin', $options['currentUser']);
+    }
+
+    public function testOriginFilterPagesThroughThatBackendOnly(): void {
+        $database = $this->backend('Database');
+        $ldap = $this->backend('LDAP');
+        $this->userManager->method('getBackends')->willReturn([$database, $ldap]);
+        $this->userManager->expects($this->never())->method('search');
+        $database->expects($this->never())->method('getUsers');
+        $ldap->expects($this->once())
+            ->method('getUsers')
+            ->with('ana', 3, 4)
+            ->willReturn(['ana', 'ana.b', 'ana.c']);
+        $this->userManager->method('get')->willReturnCallback(fn (string $uid) => $this->user($uid, 'LDAP'));
+
+        $result = $this->service->listUsers(' ana ', 2, 4, 'ldap');
+
+        $this->assertTrue($result['hasMore']);
+        $this->assertSame(['ana', 'ana.b'], array_column($result['users'], 'uid'));
+        $this->assertSame(['ldap', 'ldap'], array_column($result['users'], 'backend'));
+    }
+
+    public function testOriginFilterSkipsAccountsThatVanished(): void {
+        $database = $this->backend('Database');
+        $this->userManager->method('getBackends')->willReturn([$database]);
+        $database->method('getUsers')->willReturn(['ana', 'gone']);
+        $this->userManager->method('get')->willReturnCallback(fn (string $uid) => $uid === 'gone' ? null : $this->user($uid));
+
+        $result = $this->service->listUsers('', 10, 0, 'local');
+
+        $this->assertSame(['ana'], array_column($result['users'], 'uid'));
+    }
+
+    public function testLdapFilterWithoutAnLdapBackendIsEmpty(): void {
+        $this->userManager->method('getBackends')->willReturn([$this->backend('Database')]);
+
+        $result = $this->service->listUsers('', 10, 0, 'ldap');
+
+        $this->assertSame([], $result['users']);
+        $this->assertFalse($result['hasMore']);
+    }
+
+    public function testOptionsTellWhetherAnLdapBackendExists(): void {
+        $this->config->method('getAppValue')->willReturnArgument(2);
+        $this->l10nFactory->method('getLanguages')->willReturn([]);
+
+        $this->userManager->method('getBackends')->willReturnOnConsecutiveCalls(
+            [$this->backend('Database')],
+            [$this->backend('Database'), $this->backend('LDAP')],
+        );
+
+        $this->assertFalse($this->service->getOptions()['hasLdap']);
+        $this->assertTrue($this->service->getOptions()['hasLdap']);
     }
 }
