@@ -13,183 +13,192 @@
 					<LockOutline :size="16" />
 					{{ managedNote }}
 				</p>
-				<div class="gm-ua__grid">
-					<div class="gm-ua__field" :class="fieldClass('displayname')">
-						<div class="gm-ua__label-row">
-							<component :is="canEdit('displayname') ? 'label' : 'span'"
-								class="gm-ua__label"
-								:for="canEdit('displayname') ? ids.displayname : undefined">
-								{{ t('group_manager', 'Display name') }}
-							</component>
-							<span v-if="isSaved('displayname')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
-						</div>
-						<NcTextField v-if="canEdit('displayname')"
-							:id="ids.displayname"
-							:model-value="value('displayname')"
-							:label-outside="true"
-							:disabled="applying"
-							@update:model-value="stage('displayname', $event)" />
-						<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value('displayname') }">{{ readonlyText('displayname') }}</span>
-					</div>
-
-					<!-- Pronouns sit with the name they go with. -->
-					<div v-for="field in accountProfileFields"
-						:key="field.key"
-						class="gm-ua__field"
-						:class="fieldClass(field.key)">
-						<div class="gm-ua__label-row">
-							<component :is="canEdit(field.key) ? 'label' : 'span'"
-								class="gm-ua__label"
-								:for="canEdit(field.key) ? ids.prefix + field.key : undefined">
-								{{ field.label }}
-							</component>
-							<span v-if="isSaved(field.key)" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
-						</div>
-						<NcTextField v-if="canEdit(field.key)"
-							:id="ids.prefix + field.key"
-							:model-value="value(field.key)"
-							:type="field.type || 'text'"
-							:label-outside="true"
-							:disabled="applying"
-							@update:model-value="stage(field.key, $event)" />
-						<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value(field.key) }">{{ readonlyText(field.key) }}</span>
-					</div>
-
-					<div class="gm-ua__field" :class="fieldClass('email')">
-						<div class="gm-ua__label-row">
-							<component :is="canEdit('email') ? 'label' : 'span'"
-								class="gm-ua__label"
-								:for="canEdit('email') ? ids.email : undefined">
-								{{ t('group_manager', 'Email') }}
-							</component>
-							<span v-if="isSaved('email')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
-						</div>
-						<NcTextField v-if="canEdit('email')"
-							:id="ids.email"
-							:model-value="value('email')"
-							type="email"
-							:label-outside="true"
-							:disabled="applying"
-							@update:model-value="stage('email', $event)" />
-						<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value('email') }">{{ readonlyText('email') }}</span>
-					</div>
-
-					<!-- Only where the backend lets it be set (not LDAP), and only
-					     once asked for: an empty password box on every account
-					     read as something to fill in. -->
-					<div v-if="details.backendCapabilities?.setPassword" class="gm-ua__field" :class="fieldClass('password')">
-						<div class="gm-ua__label-row">
-							<!-- A label for the box once open; while closed the button
-							     carries its own name ("Change password"). -->
-							<component :is="passwordOpen ? 'label' : 'span'"
-								class="gm-ua__label"
-								:for="passwordOpen ? ids.password : undefined">
-								{{ t('group_manager', 'Password') }}
-							</component>
-							<span v-if="isSaved('password')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
-						</div>
-						<div v-if="passwordOpen" class="gm-ua__password">
-							<NcPasswordField ref="passwordField"
-								:id="ids.password"
-								:model-value="value('password')"
+				<!-- Three rows: name and email; pronouns, language and quota;
+				     manager (and the password, for an account that has one here). -->
+				<div class="gm-ua__rows">
+					<div class="gm-ua__row" style="--gm-cols: 2">
+						<div class="gm-ua__field" :class="fieldClass('displayname')">
+							<div class="gm-ua__label-row">
+								<component :is="canEdit('displayname') ? 'label' : 'span'"
+									class="gm-ua__label"
+									:for="canEdit('displayname') ? ids.displayname : undefined">
+									{{ t('group_manager', 'Display name') }}
+								</component>
+								<span v-if="isSaved('displayname')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+							</div>
+							<NcTextField v-if="canEdit('displayname')"
+								:id="ids.displayname"
+								:model-value="value('displayname')"
 								:label-outside="true"
-								:placeholder="t('group_manager', 'New password')"
-								autocomplete="new-password"
 								:disabled="applying"
-								@update:model-value="stage('password', $event)" />
-							<NcButton variant="tertiary" :disabled="applying" @click="closePassword">
-								{{ t('group_manager', 'Cancel') }}
-							</NcButton>
+								@update:model-value="stage('displayname', $event)" />
+							<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value('displayname') }">{{ readonlyText('displayname') }}</span>
 						</div>
-						<div v-else>
-							<NcButton :disabled="applying" @click="openPassword">
-								{{ t('group_manager', 'Change password') }}
-							</NcButton>
+
+						<div class="gm-ua__field" :class="fieldClass('email')">
+							<div class="gm-ua__label-row">
+								<component :is="canEdit('email') ? 'label' : 'span'"
+									class="gm-ua__label"
+									:for="canEdit('email') ? ids.email : undefined">
+									{{ t('group_manager', 'Email') }}
+								</component>
+								<span v-if="isSaved('email')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+							</div>
+							<NcTextField v-if="canEdit('email')"
+								:id="ids.email"
+								:model-value="value('email')"
+								type="email"
+								:label-outside="true"
+								:disabled="applying"
+								@update:model-value="stage('email', $event)" />
+							<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value('email') }">{{ readonlyText('email') }}</span>
 						</div>
 					</div>
 
-					<div class="gm-ua__field" :class="fieldClass('quota')">
-						<div class="gm-ua__label-row">
-							<label class="gm-ua__label" :for="ids.quota">{{ t('group_manager', 'Personal quota') }}</label>
-							<span v-if="isSaved('quota')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+					<div class="gm-ua__row gm-ua__row--three" :style="{ '--gm-cols': accountProfileFields.length + 2 }">
+						<!-- Pronouns open the second row: profile data, but about the
+						     person, like the name and language around them. -->
+						<div v-for="field in accountProfileFields"
+							:key="field.key"
+							class="gm-ua__field"
+							:class="fieldClass(field.key)">
+							<div class="gm-ua__label-row">
+								<component :is="canEdit(field.key) ? 'label' : 'span'"
+									class="gm-ua__label"
+									:for="canEdit(field.key) ? ids.prefix + field.key : undefined">
+									{{ field.label }}
+								</component>
+								<span v-if="isSaved(field.key)" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+							</div>
+							<NcTextField v-if="canEdit(field.key)"
+								:id="ids.prefix + field.key"
+								:model-value="value(field.key)"
+								:type="field.type || 'text'"
+								:label-outside="true"
+								:disabled="applying"
+								@update:model-value="stage(field.key, $event)" />
+							<span v-else class="gm-ua__value" :class="{ 'gm-ua__value--empty': !value(field.key) }">{{ readonlyText(field.key) }}</span>
 						</div>
-						<NcSelect :input-id="ids.quota"
-							:model-value="quotaOption"
-							:options="quotaOptions"
-							:clearable="false"
-							:taggable="true"
-							:create-option="createQuotaOption"
-							:disabled="applying"
-							label="label"
-							:label-outside="true"
-							@update:model-value="onQuotaPicked" />
-						<!-- Usage against a limit only: with no limit there is
-						     nothing to measure it by, and the amount used is in the
-						     header already. -->
-						<div v-if="usage" class="gm-ua__usage">
-							<NcProgressBar :value="Math.min(usage.percent, 100)"
-								:error="usage.percent >= 90"
-								size="small"
-								:aria-label="t('group_manager', 'Storage usage')" />
-							<span class="gm-ua__hint">{{ usage.text }}</span>
+
+						<div class="gm-ua__field" :class="fieldClass('language')">
+							<div class="gm-ua__label-row">
+								<label class="gm-ua__label" :for="ids.language">{{ t('group_manager', 'Language') }}</label>
+								<span v-if="isSaved('language')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+							</div>
+							<NcSelect :input-id="ids.language"
+								:model-value="languageOption"
+								:options="languageOptions"
+								:clearable="false"
+								:disabled="applying"
+								label="name"
+								:label-outside="true"
+								@update:model-value="stage('language', $event?.code ?? '')" />
 						</div>
-						<span v-if="quotaError" class="gm-ua__hint gm-ua__hint--error">{{ quotaError }}</span>
+
+						<div class="gm-ua__field" :class="fieldClass('quota')">
+							<div class="gm-ua__label-row">
+								<label class="gm-ua__label" :for="ids.quota">{{ t('group_manager', 'Personal quota') }}</label>
+								<span v-if="isSaved('quota')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+							</div>
+							<NcSelect :input-id="ids.quota"
+								:model-value="quotaOption"
+								:options="quotaOptions"
+								:clearable="false"
+								:taggable="true"
+								:create-option="createQuotaOption"
+								:disabled="applying"
+								label="label"
+								:label-outside="true"
+								@update:model-value="onQuotaPicked" />
+							<!-- Usage against a limit only: with no limit there is
+							     nothing to measure it by, and the amount used is in the
+							     header already. -->
+							<div v-if="usage" class="gm-ua__usage">
+								<NcProgressBar :value="Math.min(usage.percent, 100)"
+									:error="usage.percent >= 90"
+									size="small"
+									:aria-label="t('group_manager', 'Storage usage')" />
+								<span class="gm-ua__hint">{{ usage.text }}</span>
+							</div>
+							<span v-if="quotaError" class="gm-ua__hint gm-ua__hint--error">{{ quotaError }}</span>
+						</div>
 					</div>
 
-					<div class="gm-ua__field" :class="fieldClass('language')">
-						<div class="gm-ua__label-row">
-							<label class="gm-ua__label" :for="ids.language">{{ t('group_manager', 'Language') }}</label>
-							<span v-if="isSaved('language')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+					<div class="gm-ua__row" style="--gm-cols: 2">
+						<div class="gm-ua__field" :class="fieldClass('manager')">
+							<div class="gm-ua__label-row">
+								<label class="gm-ua__label" :for="ids.manager">{{ t('group_manager', 'Manager') }}</label>
+								<span v-if="isSaved('manager')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+							</div>
+							<NcSelect :input-id="ids.manager"
+								:model-value="managerOption"
+								:options="managerOptions"
+								:filterable="false"
+								:loading="managerLoading"
+								:disabled="applying"
+								:placeholder="t('group_manager', 'None')"
+								label="displayName"
+								:label-outside="true"
+								@search="searchManagers"
+								@update:model-value="onManagerPicked">
+								<template #option="option">
+									<span class="gm-ua__person">
+										<NcAvatar :user="option.uid"
+											:display-name="option.displayName"
+											:size="24"
+											:hide-status="true"
+											:disable-menu="true"
+											:disable-tooltip="true" />
+										<span class="gm-ua__person-name">{{ option.displayName }}</span>
+									</span>
+								</template>
+								<template #selected-option="option">
+									<span class="gm-ua__person">
+										<NcAvatar :user="option.uid"
+											:display-name="option.displayName"
+											:size="24"
+											:hide-status="true"
+											:disable-menu="true"
+											:disable-tooltip="true" />
+										<span class="gm-ua__person-name">{{ option.displayName }}</span>
+									</span>
+								</template>
+							</NcSelect>
 						</div>
-						<NcSelect :input-id="ids.language"
-							:model-value="languageOption"
-							:options="languageOptions"
-							:clearable="false"
-							:disabled="applying"
-							label="name"
-							:label-outside="true"
-							@update:model-value="stage('language', $event?.code ?? '')" />
-					</div>
 
-					<div class="gm-ua__field" :class="fieldClass('manager')">
-						<div class="gm-ua__label-row">
-							<label class="gm-ua__label" :for="ids.manager">{{ t('group_manager', 'Manager') }}</label>
-							<span v-if="isSaved('manager')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+						<!-- Only where the backend lets it be set (not LDAP), and only
+						     once asked for: an empty password box on every account
+						     read as something to fill in. -->
+						<div v-if="details.backendCapabilities?.setPassword" class="gm-ua__field" :class="fieldClass('password')">
+							<div class="gm-ua__label-row">
+								<!-- A label for the box once open; while closed the button
+								     carries its own name ("Change password"). -->
+								<component :is="passwordOpen ? 'label' : 'span'"
+									class="gm-ua__label"
+									:for="passwordOpen ? ids.password : undefined">
+									{{ t('group_manager', 'Password') }}
+								</component>
+								<span v-if="isSaved('password')" class="gm-ua__saved"><Check :size="14" />{{ t('group_manager', 'Saved') }}</span>
+							</div>
+							<div v-if="passwordOpen" class="gm-ua__password">
+								<NcPasswordField ref="passwordField"
+									:id="ids.password"
+									:model-value="value('password')"
+									:label-outside="true"
+									:placeholder="t('group_manager', 'New password')"
+									autocomplete="new-password"
+									:disabled="applying"
+									@update:model-value="stage('password', $event)" />
+								<NcButton variant="tertiary" :disabled="applying" @click="closePassword">
+									{{ t('group_manager', 'Cancel') }}
+								</NcButton>
+							</div>
+							<div v-else>
+								<NcButton :disabled="applying" @click="openPassword">
+									{{ t('group_manager', 'Change password') }}
+								</NcButton>
+							</div>
 						</div>
-						<NcSelect :input-id="ids.manager"
-							:model-value="managerOption"
-							:options="managerOptions"
-							:filterable="false"
-							:loading="managerLoading"
-							:disabled="applying"
-							:placeholder="t('group_manager', 'None')"
-							label="displayName"
-							:label-outside="true"
-							@search="searchManagers"
-							@update:model-value="onManagerPicked">
-							<template #option="option">
-								<span class="gm-ua__person">
-									<NcAvatar :user="option.uid"
-										:display-name="option.displayName"
-										:size="24"
-										:hide-status="true"
-										:disable-menu="true"
-										:disable-tooltip="true" />
-									<span class="gm-ua__person-name">{{ option.displayName }}</span>
-								</span>
-							</template>
-							<template #selected-option="option">
-								<span class="gm-ua__person">
-									<NcAvatar :user="option.uid"
-										:display-name="option.displayName"
-										:size="24"
-										:hide-status="true"
-										:disable-menu="true"
-										:disable-tooltip="true" />
-									<span class="gm-ua__person-name">{{ option.displayName }}</span>
-								</span>
-							</template>
-						</NcSelect>
 					</div>
 				</div>
 			</section>
@@ -207,7 +216,7 @@
 						@update:model-value="stage('profile_enabled', $event ? '1' : '0')">
 						{{ t('group_manager', 'Public profile visible') }}
 					</NcCheckboxRadioSwitch>
-					<span class="gm-ua__hint">{{ t('group_manager', 'Shows these fields on the person\'s profile page. When off, they are kept and can still be edited.') }}</span>
+					<span class="gm-ua__hint">{{ t('group_manager', 'Shows these fields on the profile page.') }}</span>
 				</div>
 
 				<!-- Faded while the profile is hidden, still editable. -->
@@ -733,6 +742,9 @@ export default {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-border-dark) transparent;
+	container-type: inline-size;
 	padding: 4px var(--gm-scrollbar-w) 16px 0;
 	margin-right: calc(-1 * var(--gm-scrollbar-w));
 }
@@ -852,7 +864,45 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	margin-bottom: 16px;
+}
+
+/* Flush left with the headings and fields: the switch's own inline padding
+   (room for a focus ring around a lone icon) set it in. */
+.gm-ua__visibility :deep(.checkbox-content) {
+	padding-inline-start: 0;
+}
+
+/* Rows of the Account section, each with its own number of columns. */
+.gm-ua__rows {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.gm-ua__row {
+	display: grid;
+	grid-template-columns: repeat(var(--gm-cols, 2), minmax(0, 1fr));
+	gap: 16px 20px;
+	align-items: start;
+}
+
+/* Pronouns are short; the quota's "Default (Unlimited)" is not. */
+.gm-ua__row--three {
+	grid-template-columns: minmax(0, .7fr) minmax(0, 1fr) minmax(0, 1.3fr);
+}
+
+/* Without pronouns (an older server): language and quota halve the row. */
+.gm-ua__row--three[style*="--gm-cols: 2"] {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* A narrow panel: one field per line. */
+@container (max-width: 560px) {
+	.gm-ua__row,
+	.gm-ua__row--three,
+	.gm-ua__row--three[style*="--gm-cols: 2"] {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 /* A hidden profile: its fields faded, still editable. */
@@ -861,13 +911,13 @@ export default {
 	opacity: .5;
 }
 
-.gm-ua__subsection + .gm-ua__subsection,
-.gm-ua__subsection + .gm-ua__bio {
-	margin-top: 20px;
+.gm-ua__subsection,
+.gm-ua__bio {
+	margin-top: 24px;
 }
 
 .gm-ua__subheading {
-	margin: 0 0 10px;
+	margin: 0 0 8px;
 	font-size: 14px;
 	font-weight: 600;
 	color: var(--color-main-text);
@@ -908,10 +958,6 @@ export default {
 
 .gm-ua__hint--error {
 	color: var(--color-text-error, var(--color-error));
-}
-
-.gm-ua__bio {
-	margin-top: 16px;
 }
 
 /* A staged field: a primary-coloured bar on its left, the same cue for

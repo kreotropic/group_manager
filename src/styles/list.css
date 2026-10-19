@@ -150,9 +150,11 @@
 	min-height: 0;
 	overflow-x: hidden;
 	overflow-y: auto;
-	/* Thin bar without arrows; the gutter is reserved so the rows keep the
-	   same right margin whether or not the list scrolls. */
+	/* Thin bar; the gutter is reserved so the rows keep the same right
+	   margin whether or not the list scrolls. */
 	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-border-dark) transparent;
 	padding: 0 0 8px 8px;
 }
 

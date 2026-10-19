@@ -206,10 +206,16 @@ export default {
 		window.addEventListener('beforeunload', this.onBeforeUnload)
 
 		window.addEventListener('resize', this.onWindowResize)
-		this.$nextTick(() => this.setListWidth(this.listWidth))
+		this.$nextTick(this.measureMinListWidth)
+		// Measured again once the web fonts are in: they set the width.
+		document.fonts?.ready.then(() => this.measureMinListWidth())
 
 		fetchQuickAccess().then((v) => { this.quickAccess = v }).catch(() => {})
-		fetchUserOptions().then((v) => { this.userOptions = v }).catch(() => {})
+		fetchUserOptions().then((v) => {
+			this.userOptions = v
+			// hasLdap adds the Local and LDAP filters: a wider track.
+			this.$nextTick(this.measureMinListWidth)
+		}).catch(() => {})
 		await this.loadGroups()
 
 		// Deep links: #group=<gid> (only if that group still exists),
@@ -219,6 +225,7 @@ export default {
 			this.mode = 'users'
 			this.usersVisited = true
 			this.selectedUid = id
+			this.$nextTick(this.measureMinListWidth)
 		} else if (id && this.groups.some((g) => g.id === id)) {
 			this.selectedId = id
 		}
@@ -330,6 +337,7 @@ export default {
 				this.usersVisited = true
 			}
 			this.pushHistory()
+			this.$nextTick(this.measureMinListWidth)
 		},
 
 		/**
@@ -393,6 +401,7 @@ export default {
 			this.hasPendingMemberChanges = false
 			this.historyIndex = targetIndex
 			this.mode = target.mode
+			this.$nextTick(this.measureMinListWidth)
 			if (target.mode === 'users') {
 				this.usersVisited = true
 				this.selectedUid = target.id ?? null
@@ -476,11 +485,31 @@ export default {
 
 		maxListWidth() {
 			const total = this.$refs.layout?.clientWidth ?? 0
-			return Math.max(MIN_LIST_WIDTH, Math.min(MAX_LIST_WIDTH, total - MIN_DETAIL_WIDTH))
+			return Math.max(this.minListWidth, Math.min(MAX_LIST_WIDTH, total - MIN_DETAIL_WIDTH))
+		},
+
+		/**
+		 * The narrowest the visible list can be without its controls
+		 * overflowing (the four filters, Groups | Users and the menu): its
+		 * min-content width, which follows the language and the platform's
+		 * font, so no fixed number fits all. MIN_LIST_WIDTH is the floor. A
+		 * stored width below it is widened to it.
+		 */
+		measureMinListWidth() {
+			const list = [...(this.$refs.layout?.children ?? [])]
+				.find((el) => el.classList.contains('gm-list') && el.offsetParent !== null)
+			if (list) {
+				const width = list.style.width
+				list.style.width = 'min-content'
+				const needed = Math.ceil(list.getBoundingClientRect().width)
+				list.style.width = width
+				this.minListWidth = Math.max(MIN_LIST_WIDTH, needed)
+			}
+			this.setListWidth(this.listWidth)
 		},
 
 		setListWidth(value, save = false) {
-			this.listWidth = Math.round(Math.min(Math.max(value, MIN_LIST_WIDTH), this.maxListWidth()))
+			this.listWidth = Math.round(Math.min(Math.max(value, this.minListWidth), this.maxListWidth()))
 			if (save) {
 				storeWidth(this.listWidth)
 			}
@@ -520,7 +549,7 @@ export default {
 			} else if (event.key === 'ArrowRight') {
 				this.setListWidth(this.listWidth + step, true)
 			} else if (event.key === 'Home') {
-				this.setListWidth(MIN_LIST_WIDTH, true)
+				this.setListWidth(this.minListWidth, true)
 			} else if (event.key === 'End') {
 				this.setListWidth(this.maxListWidth(), true)
 			} else {
