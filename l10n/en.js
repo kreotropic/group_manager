@@ -323,12 +323,12 @@ OC.L10N.register(
     "Name, email and password are managed by the account's backend." : "Name, email and password are managed by the account's backend.",
     "Public profile visible" : "Public profile visible",
     "Saved" : "Saved",
-    "Shows these fields on the person's profile page. When off, they are kept and can still be edited." : "Shows these fields on the person's profile page. When off, they are kept and can still be edited.",
     "Social" : "Social",
     "Some account fields are managed by LDAP." : "Some account fields are managed by LDAP.",
     "Some account fields are managed by the account's backend." : "Some account fields are managed by the account's backend.",
     "Work" : "Work",
     "last login {date}" : "last login {date}",
-    "never logged in" : "never logged in"
+    "never logged in" : "never logged in",
+    "Shows these fields on the profile page." : "Shows these fields on the profile page."
 },
 "nplurals=2; plural=(n != 1);");

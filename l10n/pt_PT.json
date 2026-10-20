@@ -361,13 +361,13 @@
         "Name, email and password are managed by the account's backend.": "Nome, email e palavra-passe são geridos pelo backend da conta.",
         "Public profile visible": "Perfil público visível",
         "Saved": "Guardado",
-        "Shows these fields on the person's profile page. When off, they are kept and can still be edited.": "Mostra estes campos na página de perfil da pessoa. Desligado, os campos mantêm-se e continuam editáveis.",
         "Social": "Redes",
         "Some account fields are managed by LDAP.": "Alguns campos da conta são geridos pelo LDAP.",
         "Some account fields are managed by the account's backend.": "Alguns campos da conta são geridos pelo backend da conta.",
         "Work": "Trabalho",
         "last login {date}": "último acesso {date}",
-        "never logged in": "nunca acedeu"
+        "never logged in": "nunca acedeu",
+        "Shows these fields on the profile page.": "Mostra estes campos na página de perfil."
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }
